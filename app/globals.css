@@ -1,0 +1,173 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --text: #1f2328;
+  --muted: #667085;
+  --line: #e7e7e4;
+  --brand: #2563eb;
+  --brand-strong: #1d4ed8;
+  --shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: "Segoe UI", "Noto Sans KR", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.shell {
+  width: min(680px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 72px 0;
+}
+
+.panel {
+  display: grid;
+  gap: 24px;
+  padding: 32px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--brand);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.intro {
+  display: grid;
+  gap: 10px;
+}
+
+.intro h1 {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 2.9rem);
+  line-height: 1.2;
+}
+
+.lead {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.format {
+  margin: 0;
+  color: var(--brand);
+  font-size: 0.92rem;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+}
+
+.label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.label span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.field {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 16px;
+  outline: none;
+}
+
+.field:focus {
+  border-color: rgba(37, 99, 235, 0.7);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.row {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 720px) {
+  .row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.submit {
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 18px;
+  background: var(--brand);
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.submit:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.result {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #dbeafe;
+}
+
+.result strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.result a {
+  color: var(--brand-strong);
+  word-break: break-all;
+}
+
+.error {
+  color: #b42318;
+}
+
+.help p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 24px 0;
+  }
+
+  .panel {
+    padding: 22px;
+  }
+}
