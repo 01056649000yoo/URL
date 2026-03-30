@@ -40,14 +40,19 @@ export default function HomePage() {
         body: JSON.stringify(payload),
       });
 
-      const data = (await response.json()) as CreateResult | ErrorResult;
+      const rawText = await response.text();
+      const data = rawText ? (JSON.parse(rawText) as CreateResult | ErrorResult) : null;
 
       if (!response.ok) {
-        const message = "error" in data ? data.error : undefined;
+        const message = data && "error" in data ? data.error : undefined;
         throw new Error(message ?? "단축 링크를 만들지 못했습니다.");
       }
 
-      setResult(data as CreateResult);
+      if (!data || !("shortUrl" in data)) {
+        throw new Error("서버 응답을 확인하지 못했습니다.");
+      }
+
+      setResult(data);
       event.currentTarget.reset();
     } catch (caught) {
       const message =
@@ -64,9 +69,7 @@ export default function HomePage() {
         <div className="intro">
           <p className="eyebrow">개인용 URL 단축기</p>
           <h1>긴 주소를 짧게 바꿔보세요</h1>
-          <p className="lead">
-            자주 공유하는 링크를 짧은 주소로 만들고 바로 사용할 수 있습니다.
-          </p>
+          <p className="lead">자주 공유하는 링크를 짧은 주소로 만들고 바로 사용할 수 있습니다.</p>
           <p className="format">생성 형식: `도메인/slug`</p>
         </div>
 
@@ -96,12 +99,7 @@ export default function HomePage() {
 
             <label className="label">
               <span>메모</span>
-              <input
-                className="field"
-                name="createdBy"
-                type="text"
-                placeholder="선택 사항"
-              />
+              <input className="field" name="createdBy" type="text" placeholder="선택 사항" />
             </label>
           </div>
 
