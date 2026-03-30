@@ -23,7 +23,8 @@ export default function HomePage() {
     setError("");
     setResult(null);
 
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const payload = {
       destination: String(formData.get("destination") ?? ""),
       slug: String(formData.get("slug") ?? ""),
@@ -53,7 +54,7 @@ export default function HomePage() {
       }
 
       setResult(data);
-      event.currentTarget.reset();
+      form.reset();
     } catch (caught) {
       const message =
         caught instanceof Error ? caught.message : "알 수 없는 오류가 발생했습니다.";
