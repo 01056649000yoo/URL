@@ -1,4 +1,5 @@
 const ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
+const DEFAULT_SLUG_LENGTH = 4;
 
 export function normalizeSlug(value: string) {
   const normalized = value
@@ -14,7 +15,7 @@ export function normalizeSlug(value: string) {
   return normalized;
 }
 
-export function generateSlug(length = 6) {
+export function generateSlug(length = DEFAULT_SLUG_LENGTH) {
   let output = "";
   for (let index = 0; index < length; index += 1) {
     const randomIndex = Math.floor(Math.random() * ALPHABET.length);
