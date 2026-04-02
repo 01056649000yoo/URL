@@ -252,10 +252,6 @@ export default function HomePage() {
 
         {error ? <p className="error">{error}</p> : null}
 
-        <p className="warning-note">
-          오용과 남용을 막기 위해 과도한 생성, 자동화된 요청, 비정상적인 사용은 제한될 수 있습니다.
-        </p>
-
         <div className="public-footer-banner" aria-label="샘링크 통계">
           <div className="banner-card">
             <span className="banner-label">누적 생성 주소</span>
@@ -273,6 +269,10 @@ export default function HomePage() {
             <span className="banner-subtext">만료 후 정리된 수</span>
           </div>
         </div>
+
+        <p className="warning-note">
+          오용과 남용을 막기 위해 과도한 생성, 자동화된 요청, 비정상적인 사용은 제한될 수 있습니다.
+        </p>
       </section>
 
       {isQrOpen && resultUrl ? (
