@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { domainToUnicode } from "node:url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateSlug, normalizeSlug } from "@/lib/slug";
+import { getRateLimitKey } from "@/lib/rate-limit";
 import { getBaseUrl } from "@/lib/site-url";
 
 type CreateLinkPayload = {
@@ -85,6 +86,38 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+    const rateLimitKey = getRateLimitKey(request);
+    const { data: rateLimitData, error: rateLimitError } = await admin.rpc(
+      "consume_short_link_rate_limit",
+      {
+        ip_hash: rateLimitKey,
+      },
+    );
+
+    if (rateLimitError) {
+      return NextResponse.json(
+        { error: `속도 제한을 확인하지 못했습니다. ${rateLimitError.message}` },
+        { status: 500 },
+      );
+    }
+
+    const rateLimit = Array.isArray(rateLimitData) ? rateLimitData[0] : rateLimitData;
+    if (!rateLimit?.allowed) {
+      const waitSeconds = Math.max(Number(rateLimit?.retry_after_seconds ?? 60), 1);
+      return NextResponse.json(
+        {
+          error: `너무 자주 요청했습니다. ${waitSeconds}초 뒤에 다시 시도해 주세요.`,
+          retryAfterSeconds: waitSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(waitSeconds),
+          },
+        },
+      );
+    }
+
     const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000).toISOString();
 
     const { data, error } = await admin

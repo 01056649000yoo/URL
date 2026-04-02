@@ -28,6 +28,17 @@ insert into public.short_link_stats (key, total_created, total_deleted)
 values ('global', 0, 0)
 on conflict (key) do nothing;
 
+create table if not exists public.short_link_rate_limits (
+  ip_hash text not null,
+  bucket text not null,
+  window_start timestamptz not null,
+  request_count integer not null default 0,
+  primary key (ip_hash, bucket, window_start)
+);
+
+create index if not exists short_link_rate_limits_window_start_idx
+on public.short_link_rate_limits (window_start);
+
 alter table public.short_links enable row level security;
 
 drop policy if exists "allow public read active short links" on public.short_links;
@@ -96,5 +107,61 @@ begin
     insert into public.short_link_stats (key, total_created, total_deleted)
     values ('global', greatest(coalesce(amount, 0), 0), 0);
   end if;
+end;
+$$;
+
+create or replace function public.consume_short_link_rate_limit(ip_hash text)
+returns table (
+  allowed boolean,
+  minute_count integer,
+  day_count integer,
+  retry_after_seconds integer
+)
+language plpgsql
+security definer
+as $$
+declare
+  minute_bucket_start timestamptz;
+  day_bucket_start timestamptz;
+  minute_limit constant integer := 12;
+  day_limit constant integer := 50;
+  now_utc timestamptz := timezone('utc', now());
+begin
+  minute_bucket_start := timezone(
+    'utc',
+    to_timestamp(floor(extract(epoch from now_utc) / 60) * 60)
+  );
+  day_bucket_start := timezone('utc', date_trunc('day', now_utc));
+
+  insert into public.short_link_rate_limits (ip_hash, bucket, window_start, request_count)
+  values (ip_hash, 'minute', minute_bucket_start, 1)
+  on conflict (ip_hash, bucket, window_start)
+  do update set request_count = public.short_link_rate_limits.request_count + 1
+  returning request_count into minute_count;
+
+  insert into public.short_link_rate_limits (ip_hash, bucket, window_start, request_count)
+  values (ip_hash, 'day', day_bucket_start, 1)
+  on conflict (ip_hash, bucket, window_start)
+  do update set request_count = public.short_link_rate_limits.request_count + 1
+  returning request_count into day_count;
+
+  allowed := minute_count <= minute_limit and day_count <= day_limit;
+  retry_after_seconds := 0;
+
+  if minute_count > minute_limit then
+    retry_after_seconds := greatest(60 - mod(floor(extract(epoch from now_utc))::integer, 60), 1);
+  elsif day_count > day_limit then
+    retry_after_seconds := greatest(
+      extract(epoch from ((day_bucket_start + interval '1 day') - now_utc))::integer,
+      1
+    );
+  end if;
+
+  delete from public.short_link_rate_limits
+  where (bucket = 'minute' and window_start < now_utc - interval '2 days')
+     or (bucket = 'day' and window_start < now_utc - interval '90 days');
+
+  return query
+    select allowed, minute_count, day_count, retry_after_seconds;
 end;
 $$;
