@@ -1,14 +1,8 @@
 "use client";
 
+import type { Session } from "@supabase/supabase-js";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-
-type Session = {
-  access_token: string;
-  user: {
-    email?: string | null;
-  };
-};
 
 type AdminLink = {
   id: number;
@@ -39,6 +33,21 @@ function formatDateTime(value?: string | null) {
   }).format(date);
 }
 
+function getRemainingLabel(expiresAt?: string | null) {
+  if (!expiresAt) return "-";
+  const end = new Date(expiresAt).getTime();
+  if (Number.isNaN(end)) return "-";
+
+  const diff = end - Date.now();
+  if (diff <= 0) return "만료됨";
+
+  const totalHours = Math.ceil(diff / (60 * 60 * 1000));
+  if (totalHours < 24) return `남은 시간 ${totalHours}시간`;
+
+  const days = Math.ceil(totalHours / 24);
+  return `남은 기간 ${days}일`;
+}
+
 function statusLabel(link: AdminLink) {
   if (!link.is_active) return "비활성";
   const expiresAt = link.expires_at ? new Date(link.expires_at).getTime() : null;
@@ -59,9 +68,10 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [links, setLinks] = useState<AdminLink[]>([]);
   const [query, setQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBooting, setIsBooting] = useState(true);
   const [isLoadingLinks, setIsLoadingLinks] = useState(false);
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyIds, setBusyIds] = useState<number[]>([]);
   const [authError, setAuthError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -71,16 +81,16 @@ export default function AdminPage() {
     async function loadSession() {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-      setSession(data.session as Session | null);
+      setSession(data.session);
       setIsBooting(false);
     }
 
-    loadSession();
+    void loadSession();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession as Session | null);
+      setSession(nextSession);
       setIsBooting(false);
     });
 
@@ -93,6 +103,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!session?.access_token) {
       setLinks([]);
+      setSelectedIds([]);
       return;
     }
 
@@ -115,6 +126,7 @@ export default function AdminPage() {
       }
 
       setLinks(data.links ?? []);
+      setSelectedIds([]);
     } catch (caught) {
       const text =
         caught instanceof Error ? caught.message : "목록을 불러오지 못했습니다.";
@@ -148,10 +160,16 @@ export default function AdminPage() {
     setMessage("로그아웃되었습니다.");
   }
 
+  function setBusy(id: number, active: boolean) {
+    setBusyIds((current) =>
+      active ? Array.from(new Set([...current, id])) : current.filter((value) => value !== id),
+    );
+  }
+
   async function mutateLink(id: number, action: "toggle" | "delete") {
     if (!session?.access_token) return;
 
-    setBusyId(id);
+    setBusy(id, true);
     setMessage("");
     setAuthError("");
 
@@ -186,7 +204,37 @@ export default function AdminPage() {
       const text = caught instanceof Error ? caught.message : "작업을 완료하지 못했습니다.";
       setAuthError(text);
     } finally {
-      setBusyId(null);
+      setBusy(id, false);
+    }
+  }
+
+  async function bulkDelete() {
+    if (!session?.access_token || selectedIds.length === 0) return;
+
+    setAuthError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/links/bulk-delete", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+
+      const data = (await response.json()) as { error?: string; deleted?: number };
+      if (!response.ok) {
+        throw new Error(data.error ?? "선택한 링크를 삭제하지 못했습니다.");
+      }
+
+      setMessage(`선택한 링크 ${data.deleted ?? 0}개를 삭제했습니다.`);
+      await loadLinks(session.access_token);
+    } catch (caught) {
+      const text =
+        caught instanceof Error ? caught.message : "선택한 링크를 삭제하지 못했습니다.";
+      setAuthError(text);
     }
   }
 
@@ -221,6 +269,28 @@ export default function AdminPage() {
       ),
     );
   }, [links, query]);
+
+  const allVisibleSelected =
+    filteredLinks.length > 0 && filteredLinks.every((link) => selectedIds.includes(link.id));
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) {
+      setSelectedIds((current) =>
+        current.filter((id) => !filteredLinks.some((link) => link.id === id)),
+      );
+      return;
+    }
+
+    setSelectedIds((current) =>
+      Array.from(new Set([...current, ...filteredLinks.map((link) => link.id)])),
+    );
+  }
+
+  function toggleSelected(id: number) {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+  }
 
   if (isBooting) {
     return (
@@ -296,6 +366,14 @@ export default function AdminPage() {
             <button className="ghost-button" type="button" onClick={cleanupExpired}>
               만료 링크 정리
             </button>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={bulkDelete}
+              disabled={selectedIds.length === 0}
+            >
+              선택 삭제 {selectedIds.length ? `(${selectedIds.length})` : ""}
+            </button>
             <button className="ghost-button" type="button" onClick={handleLogout}>
               로그아웃
             </button>
@@ -333,9 +411,20 @@ export default function AdminPage() {
           <table className="admin-table">
             <thead>
               <tr>
+                <th>
+                  <label className="table-check">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleSelectAll}
+                    />
+                    <span>선택</span>
+                  </label>
+                </th>
                 <th>짧은 주소</th>
                 <th>원본 주소</th>
                 <th>만료일</th>
+                <th>남은 기간</th>
                 <th>클릭</th>
                 <th>상태</th>
                 <th>작업</th>
@@ -344,17 +433,25 @@ export default function AdminPage() {
             <tbody>
               {isLoadingLinks ? (
                 <tr>
-                  <td colSpan={6}>불러오는 중...</td>
+                  <td colSpan={8}>불러오는 중...</td>
                 </tr>
               ) : filteredLinks.length ? (
                 filteredLinks.map((link) => (
                   <tr key={link.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(link.id)}
+                        onChange={() => toggleSelected(link.id)}
+                      />
+                    </td>
                     <td>
                       <div className="table-url">{`${BRAND_DOMAIN}/${link.slug}`}</div>
                       <div className="table-sub">{link.created_by ?? "-"}</div>
                     </td>
                     <td className="table-destination">{link.destination}</td>
                     <td>{formatDateTime(link.expires_at)}</td>
+                    <td>{getRemainingLabel(link.expires_at)}</td>
                     <td>{link.click_count}</td>
                     <td>
                       <span className={`status-pill ${statusClass(link)}`}>
@@ -366,7 +463,7 @@ export default function AdminPage() {
                         <button
                           className="mini-button"
                           type="button"
-                          disabled={busyId === link.id}
+                          disabled={busyIds.includes(link.id)}
                           onClick={() => mutateLink(link.id, "toggle")}
                         >
                           {link.is_active ? "비활성화" : "복원"}
@@ -374,7 +471,7 @@ export default function AdminPage() {
                         <button
                           className="mini-button danger"
                           type="button"
-                          disabled={busyId === link.id}
+                          disabled={busyIds.includes(link.id)}
                           onClick={() => mutateLink(link.id, "delete")}
                         >
                           삭제
@@ -385,7 +482,7 @@ export default function AdminPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>표시할 링크가 없습니다.</td>
+                  <td colSpan={8}>표시할 링크가 없습니다.</td>
                 </tr>
               )}
             </tbody>

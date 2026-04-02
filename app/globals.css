@@ -409,6 +409,11 @@ input {
   border-bottom: 1px solid var(--line);
 }
 
+.admin-table th:first-child,
+.admin-table td:first-child {
+  width: 72px;
+}
+
 .admin-table th {
   font-size: 0.88rem;
   color: var(--muted);
@@ -449,6 +454,17 @@ input {
 .status-pill.expired {
   background: rgba(239, 68, 68, 0.12);
   color: #b91c1c;
+}
+
+.table-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.table-check input {
+  accent-color: var(--brand);
 }
 
 .admin-note {
