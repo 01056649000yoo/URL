@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type CreateResult = {
   shortUrl: string;
@@ -38,8 +38,27 @@ export default function HomePage() {
   const [result, setResult] = useState<CreateResult | null>(null);
   const [error, setError] = useState("");
   const [copyLabel, setCopyLabel] = useState("복사");
+  const [isQrOpen, setIsQrOpen] = useState(false);
 
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
+
+  const qrImageUrl = useMemo(() => {
+    if (!resultUrl) return "";
+    return `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=10&data=${encodeURIComponent(resultUrl)}`;
+  }, [resultUrl]);
+
+  useEffect(() => {
+    if (!isQrOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsQrOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isQrOpen]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,6 +66,7 @@ export default function HomePage() {
     setError("");
     setResult(null);
     setCopyLabel("복사");
+    setIsQrOpen(false);
 
     const form = event.currentTarget;
     const formData = new FormData(form);
@@ -110,8 +130,8 @@ export default function HomePage() {
             className="brand-logo"
             src="/samlink-logo.svg"
             alt="샘링크 로고"
-            width={138}
-            height={36}
+            width={180}
+            height={50}
             priority
           />
         </header>
@@ -174,6 +194,14 @@ export default function HomePage() {
                 </button>
               </div>
 
+              <button className="qr-launch" type="button" onClick={() => setIsQrOpen(true)}>
+                <div className="qr-launch-copy">
+                  <span className="qr-launch-label">QR 코드 보기</span>
+                  <span className="qr-launch-hint">누르면 크게 열립니다</span>
+                </div>
+                <img className="qr-thumb" src={qrImageUrl} alt="단축링크 QR 코드" />
+              </button>
+
               {result.expiresAt ? (
                 <p className="result-meta">만료 예정: {formatDateTime(result.expiresAt)}</p>
               ) : null}
@@ -192,6 +220,19 @@ export default function HomePage() {
           <p>자동 생성 코드는 4자리로 만들고, 선택한 기간이 지나면 DB에서 자동으로 정리됩니다.</p>
         </div>
       </section>
+
+      {isQrOpen && resultUrl ? (
+        <div className="qr-overlay" role="presentation" onClick={() => setIsQrOpen(false)}>
+          <div className="qr-modal" role="dialog" aria-modal="true" aria-label="QR 코드 크게 보기" onClick={(event) => event.stopPropagation()}>
+            <button className="qr-close" type="button" onClick={() => setIsQrOpen(false)} aria-label="QR 코드 닫기">
+              닫기
+            </button>
+            <p className="qr-modal-title">단축링크 QR 코드</p>
+            <img className="qr-modal-image" src={qrImageUrl} alt="단축링크 QR 코드 크게 보기" />
+            <p className="qr-modal-link">{resultUrl}</p>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
