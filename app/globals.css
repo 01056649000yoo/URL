@@ -187,7 +187,7 @@ input {
 }
 
 .result-head strong {
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
 .result-tip {
@@ -204,12 +204,15 @@ input {
 
 .result-link {
   min-width: 0;
-  padding: 14px 16px;
-  border-radius: 16px;
+  padding: 18px 20px;
+  border-radius: 20px;
   background: #fff;
   box-shadow: inset 0 0 0 1px rgba(91, 99, 246, 0.12);
   color: var(--brand-strong);
-  font-weight: 700;
+  font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+  font-weight: 800;
+  line-height: 1.3;
+  text-decoration: none;
   word-break: break-all;
 }
 
@@ -218,12 +221,13 @@ input {
   align-items: center;
   gap: 8px;
   border: 0;
-  border-radius: 16px;
-  padding: 13px 14px;
+  border-radius: 18px;
+  padding: 16px 18px;
   background: var(--text);
   color: #fff;
   cursor: pointer;
   white-space: nowrap;
+  font-weight: 800;
 }
 
 .copy-button svg {
@@ -240,6 +244,7 @@ input {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+  font-size: 1rem;
 }
 
 .error {

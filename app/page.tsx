@@ -127,7 +127,7 @@ export default function HomePage() {
         <section className="result-card" aria-live="polite">
           <div className="result-head">
             <strong>생성된 단축 링크</strong>
-            <span className="result-tip">기본 형식: `{BRAND_DOMAIN}/코드4자`</span>
+            <span className="result-tip">기본 형식: {BRAND_DOMAIN}/코드4자</span>
           </div>
 
           {result ? (
