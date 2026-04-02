@@ -1,18 +1,15 @@
-<svg width="240" height="64" viewBox="0 0 240 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Samlink logo">
+<svg width="260" height="72" viewBox="0 0 260 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="샘링크 로고">
   <defs>
-    <linearGradient id="g1" x1="4" y1="8" x2="236" y2="56" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#4F6CFB"/>
-      <stop offset="1" stop-color="#2DD4BF"/>
-    </linearGradient>
-    <linearGradient id="g2" x1="8" y1="14" x2="54" y2="52" gradientUnits="userSpaceOnUse">
+    <linearGradient id="badge" x1="4" y1="4" x2="68" y2="68" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FF7FA8"/>
       <stop offset="1" stop-color="#4F6CFB"/>
     </linearGradient>
+    <linearGradient id="wordmark" x1="76" y1="18" x2="240" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#214AD8"/>
+      <stop offset="1" stop-color="#2DD4BF"/>
+    </linearGradient>
   </defs>
-  <rect x="2" y="2" width="60" height="60" rx="20" fill="url(#g2)"/>
-  <path d="M19 18h13.2c4.4 0 7.9 3.4 7.9 7.7 0 3.2-1.9 5.9-4.7 7.1l6 9.5h-7.7l-5.1-8.3h-3.6v8.3H19V18Zm6 6.1v6.1h6.1c1.7 0 3.1-1.4 3.1-3.1s-1.4-3-3.1-3H25Z" fill="white"/>
-  <path d="M76 18h12.6v28.8H76V18Z" fill="url(#g1)"/>
-  <path d="M99 18h11.9l8.3 12.1L127.5 18H139v28.8h-11.1V34.1l-7.1 10.3h-2.8l-7-10.1v12.5H99V18Z" fill="url(#g1)"/>
-  <path d="M148 18h11.8l7.4 20.1 7.4-20.1H187l-12.2 28.8h-14.9L148 18Z" fill="url(#g1)"/>
-  <path d="M194 18h12.4v28.8H194V18Z" fill="url(#g1)"/>
+  <rect x="4" y="4" width="64" height="64" rx="22" fill="url(#badge)"/>
+  <path d="M25 23H37.7C42.7 23 46.6 26.8 46.6 31.7C46.6 35.3 44.6 38.4 41.5 39.9L47.6 49H39.2L34 40.7H31V49H25V23ZM31 28.3V35.6H37.2C39.4 35.6 40.9 34.1 40.9 31.9C40.9 29.9 39.3 28.3 37.2 28.3H31Z" fill="white"/>
+  <text x="86" y="47" fill="url(#wordmark)" font-size="30" font-weight="900" font-family="Noto Sans KR, Apple SD Gothic Neo, Segoe UI, sans-serif" letter-spacing="-1.5">샘링크</text>
 </svg>

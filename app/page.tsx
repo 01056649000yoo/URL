@@ -119,7 +119,7 @@ export default function HomePage() {
         <div className="intro">
           <p className="eyebrow">{BRAND_NAME}</p>
           <h1>수업 링크를 짧게</h1>
-          <p className="lead">선생님들이 자주 쓰는 주소를 한 줄로 가볍게 줄여드려요.</p>
+          <p className="lead lead-highlight">선생님 수업 자료 링크를 한 줄로 가볍게 줄여드려요.</p>
         </div>
 
         <form className="stack" onSubmit={handleSubmit}>
