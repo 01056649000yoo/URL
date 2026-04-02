@@ -324,6 +324,7 @@ input {
 }
 
 .admin-actions,
+.admin-toolbar-actions,
 .admin-summary,
 .row-actions {
   display: flex;
@@ -359,6 +360,13 @@ input {
   gap: 12px;
 }
 
+.admin-toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
 .ghost-button,
 .mini-button {
   border: 0;
@@ -371,6 +379,11 @@ input {
 .ghost-button {
   background: rgba(91, 99, 246, 0.1);
   color: var(--brand-strong);
+}
+
+.ghost-button.danger-outline {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
 }
 
 .mini-button {
@@ -465,6 +478,10 @@ input {
 
 .table-check input {
   accent-color: var(--brand);
+}
+
+.table-row-selected {
+  background: rgba(91, 99, 246, 0.04);
 }
 
 .admin-note {
