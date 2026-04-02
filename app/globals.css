@@ -49,8 +49,8 @@ input {
 .panel {
   position: relative;
   display: grid;
-  gap: 22px;
-  padding: 34px;
+  gap: 20px;
+  padding: 32px;
   background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.84);
   border-radius: 36px;
@@ -84,7 +84,7 @@ input {
 .intro {
   position: relative;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   z-index: 1;
 }
 
@@ -99,17 +99,30 @@ input {
 
 .intro h1 {
   margin: 0;
-  font-size: clamp(2.35rem, 7vw, 4rem);
-  line-height: 1.12;
-  letter-spacing: -0.05em;
+  font-size: clamp(1.9rem, 5vw, 2.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
 }
 
 .lead {
   margin: 0;
-  max-width: 38rem;
+  max-width: 30rem;
   color: var(--muted);
-  font-size: 1.03rem;
-  line-height: 1.65;
+  font-size: 0.96rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.brand-bar {
+  display: flex;
+  align-items: center;
+}
+
+.brand-logo {
+  width: auto;
+  height: 40px;
+  object-fit: contain;
 }
 
 .stack {
@@ -191,12 +204,12 @@ input {
 }
 
 .result-head strong {
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
 .result-tip {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .result-row {
@@ -213,7 +226,7 @@ input {
   background: #fff;
   box-shadow: inset 0 0 0 1px rgba(79, 108, 251, 0.12);
   color: var(--brand-strong);
-  font-size: clamp(1.08rem, 2.2vw, 1.45rem);
+  font-size: clamp(1rem, 2vw, 1.3rem);
   font-weight: 900;
   line-height: 1.3;
   text-decoration: none;
@@ -225,8 +238,8 @@ input {
   align-items: center;
   gap: 8px;
   border: 0;
-  border-radius: 20px;
-  padding: 16px 18px;
+  border-radius: 18px;
+  padding: 14px 16px;
   background: var(--text);
   color: #fff;
   cursor: pointer;
@@ -274,7 +287,7 @@ input {
   border-radius: 999px;
   background: var(--mint);
   color: #176a57;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-weight: 800;
 }
 
@@ -324,7 +337,7 @@ input {
 .admin-header h1,
 .admin-login h1 {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 2.8rem);
+  font-size: clamp(1.8rem, 3.4vw, 2.5rem);
   line-height: 1.1;
 }
 
@@ -527,6 +540,15 @@ input {
   .panel {
     padding: 22px;
     border-radius: 24px;
+  }
+
+  .intro h1,
+  .lead {
+    white-space: normal;
+  }
+
+  .brand-logo {
+    height: 34px;
   }
 
   .result-row {

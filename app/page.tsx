@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { FormEvent, useState } from "react";
 
 type CreateResult = {
@@ -104,13 +105,21 @@ export default function HomePage() {
         <div className="panel-decoration panel-decoration-left" aria-hidden="true" />
         <div className="panel-decoration panel-decoration-right" aria-hidden="true" />
 
+        <header className="brand-bar">
+          <Image
+            className="brand-logo"
+            src="/samlink-logo.svg"
+            alt="샘링크 로고"
+            width={138}
+            height={36}
+            priority
+          />
+        </header>
+
         <div className="intro">
           <p className="eyebrow">{BRAND_NAME}</p>
-          <h1>수업에서 자주 쓰는 주소를 깔끔하게 줄여보세요</h1>
-          <p className="lead">
-            선생님들이 자주 공유하는 학습 자료와 안내 링크를 짧고 보기 좋게 만들고, 기간이
-            끝나면 자동으로 정리됩니다.
-          </p>
+          <h1>수업 링크를 짧게</h1>
+          <p className="lead">선생님들이 자주 쓰는 주소를 한 줄로 가볍게 줄여드려요.</p>
         </div>
 
         <form className="stack" onSubmit={handleSubmit}>
@@ -180,9 +189,7 @@ export default function HomePage() {
 
         <div className="help">
           <div className="help-chip">기본 코드 길이 4자리</div>
-          <p>
-            자동 생성 코드는 4자리로 만들어지고, 선택한 기간이 지나면 DB에서 자동으로 정리됩니다.
-          </p>
+          <p>자동 생성 코드는 4자리로 만들고, 선택한 기간이 지나면 DB에서 자동으로 정리됩니다.</p>
         </div>
       </section>
     </main>
