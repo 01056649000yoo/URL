@@ -106,9 +106,10 @@ export default function HomePage() {
 
         <div className="intro">
           <p className="eyebrow">{BRAND_NAME}</p>
-          <h1>길고 복잡한 주소를 상큼하게 줄여보세요</h1>
+          <h1>수업에서 자주 쓰는 주소를 깔끔하게 줄여보세요</h1>
           <p className="lead">
-            자주 쓰는 링크를 짧고 보기 좋게 만들고, 기간이 끝나면 자동으로 정리됩니다.
+            선생님들이 자주 공유하는 학습 자료와 안내 링크를 짧고 보기 좋게 만들고, 기간이
+            끝나면 자동으로 정리됩니다.
           </p>
         </div>
 
