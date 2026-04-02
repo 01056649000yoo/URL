@@ -252,11 +252,6 @@ export default function HomePage() {
 
         {error ? <p className="error">{error}</p> : null}
 
-        <div className="help">
-          <div className="help-chip">기본 코드 길이 4자리</div>
-          <p>자동 생성 코드는 4자리로 만들고, 선택한 기간이 지나면 DB에서 자동으로 정리됩니다.</p>
-        </div>
-
         <p className="warning-note">
           오용과 남용을 막기 위해 과도한 생성, 자동화된 요청, 비정상적인 사용은 제한될 수 있습니다.
         </p>
