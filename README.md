@@ -1,4 +1,4 @@
-# 쌤링크
+# 샘링크
 
 작은 그룹용 URL 단축기입니다. Vercel에서 호스팅하고, Supabase Postgres와 Supabase Auth로 관리합니다.
 
@@ -57,4 +57,3 @@ npm run dev
 - Vercel `Environment Variables`에 위 환경변수를 넣습니다.
 - `NEXT_PUBLIC_SITE_URL`은 실제 도메인으로 맞춥니다.
 - `ADMIN_EMAIL`은 관리자 계정 이메일과 같아야 합니다.
-

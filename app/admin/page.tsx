@@ -75,10 +75,6 @@ function getStatus(link: AdminLink) {
   return { label: "활성", className: "active" };
 }
 
-function copyText(value: string) {
-  return navigator.clipboard.writeText(value);
-}
-
 export default function AdminPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
@@ -319,7 +315,7 @@ export default function AdminPage() {
   async function copyShortUrl(link: AdminLink) {
     const shortUrl = `${SITE_LABEL}/${link.slug}`;
     try {
-      await copyText(shortUrl);
+      await navigator.clipboard.writeText(shortUrl);
       setCopiedId(link.id);
       window.setTimeout(() => setCopiedId((current) => (current === link.id ? null : current)), 1400);
     } catch {

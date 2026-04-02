@@ -17,8 +17,8 @@ type ErrorResult = {
 
 type RetentionPeriod = "day" | "week" | "month";
 
-const BRAND_NAME = "쌤링크";
-const BRAND_DOMAIN = "쌤링크.kr";
+const BRAND_NAME = "샘링크";
+const BRAND_DOMAIN = "샘링크.kr";
 
 function formatDateTime(value?: string) {
   if (!value) return "";
@@ -68,7 +68,7 @@ export default function HomePage() {
 
       if (!response.ok) {
         const message = data && "error" in data ? data.error : undefined;
-        throw new Error(message ?? "단축 링크를 만들지 못했습니다.");
+        throw new Error(message ?? "단축링크를 만들지 못했습니다.");
       }
 
       if (!data || !("shortUrl" in data)) {
@@ -78,8 +78,7 @@ export default function HomePage() {
       setResult(data);
       form.reset();
     } catch (caught) {
-      const message =
-        caught instanceof Error ? caught.message : "알 수 없는 오류가 발생했습니다.";
+      const message = caught instanceof Error ? caught.message : "예상치 못한 오류가 발생했습니다.";
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -100,16 +99,16 @@ export default function HomePage() {
   }
 
   return (
-    <main className="shell">
-      <section className="panel">
+    <main className="shell shell-home">
+      <section className="panel panel-home">
         <div className="panel-decoration panel-decoration-left" aria-hidden="true" />
         <div className="panel-decoration panel-decoration-right" aria-hidden="true" />
 
         <div className="intro">
           <p className="eyebrow">{BRAND_NAME}</p>
-          <h1>원본 주소만 넣으면 4자리 코드 링크가 바로 만들어져요</h1>
+          <h1>길고 복잡한 주소를 상큼하게 줄여보세요</h1>
           <p className="lead">
-            수업, 자료, 공지 링크를 빠르게 줄여서 공유할 수 있게 만든 가벼운 단축기입니다.
+            자주 쓰는 링크를 짧고 보기 좋게 만들고, 기간이 끝나면 자동으로 정리됩니다.
           </p>
         </div>
 
@@ -125,19 +124,17 @@ export default function HomePage() {
             />
           </label>
 
-          <div className="row">
-            <label className="label">
-              <span>유지 기간</span>
-              <select className="field" name="retentionPeriod" defaultValue="week" required>
-                <option value="day">1일</option>
-                <option value="week">1주일</option>
-                <option value="month">1달</option>
-              </select>
-            </label>
-          </div>
+          <label className="label">
+            <span>유지 기간</span>
+            <select className="field" name="retentionPeriod" defaultValue="week" required>
+              <option value="day">1일</option>
+              <option value="week">1주일</option>
+              <option value="month">1달</option>
+            </select>
+          </label>
 
           <button className="submit" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "링크 만드는 중..." : "단축 링크 만들기"}
+            {isSubmitting ? "만드는 중..." : "단축링크 만들기"}
           </button>
         </form>
 
@@ -157,7 +154,7 @@ export default function HomePage() {
                   className="copy-button"
                   type="button"
                   onClick={handleCopy}
-                  aria-label="단축 링크 복사"
+                  aria-label="단축링크 복사"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M9 9a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z" />
@@ -173,7 +170,7 @@ export default function HomePage() {
             </div>
           ) : (
             <p className="empty-result">
-              아직 생성된 링크가 없습니다. 주소를 입력하면 4자리 코드가 자동으로 붙습니다.
+              아직 생성된 링크가 없습니다. 주소를 입력하면 {BRAND_NAME}가 바로 짧은 주소로 바꿔드립니다.
             </p>
           )}
         </section>
@@ -181,9 +178,9 @@ export default function HomePage() {
         {error ? <p className="error">{error}</p> : null}
 
         <div className="help">
-          <div className="help-chip">기본 코드 길이 4자</div>
+          <div className="help-chip">기본 코드 길이 4자리</div>
           <p>
-            자동 생성 코드는 4자리로 만들어지고, 선택한 기간이 지나면 DB에서 자동 정리됩니다.
+            자동 생성 코드는 4자리로 만들어지고, 선택한 기간이 지나면 DB에서 자동으로 정리됩니다.
           </p>
         </div>
       </section>
