@@ -8,6 +8,11 @@ type RouteContext = {
   }>;
 };
 
+async function recordDeletedCount(admin: ReturnType<typeof createAdminClient>, count: number) {
+  if (count <= 0) return;
+  await admin.rpc("increment_deleted_short_links", { amount: count });
+}
+
 export async function PATCH(request: Request, context: RouteContext) {
   try {
     await requireAdminUser(request);
@@ -53,13 +58,19 @@ export async function DELETE(request: Request, context: RouteContext) {
     }
 
     const admin = createAdminClient();
-    const { error } = await admin.from("short_links").delete().eq("id", linkId);
+    const { data, error } = await admin
+      .from("short_links")
+      .delete()
+      .eq("id", linkId)
+      .select("id");
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ deleted: true });
+    await recordDeletedCount(admin, data?.length ?? 0);
+
+    return NextResponse.json({ deleted: true, deletedCount: data?.length ?? 0 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
     return NextResponse.json({ error: message }, { status: 401 });

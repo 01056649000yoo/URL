@@ -20,13 +20,18 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    const { error } = await admin.from("short_links").delete().in("id", ids);
+    const { data, error } = await admin.from("short_links").delete().in("id", ids).select("id");
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ deleted: ids.length });
+    const deletedCount = data?.length ?? 0;
+    if (deletedCount > 0) {
+      await admin.rpc("increment_deleted_short_links", { amount: deletedCount });
+    }
+
+    return NextResponse.json({ deleted: deletedCount });
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
     return NextResponse.json({ error: message }, { status: 401 });

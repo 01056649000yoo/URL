@@ -9,9 +9,12 @@ async function cleanupExpiredLinks() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({
-    deleted: typeof data === "number" ? data : 0,
-  });
+  const deletedCount = typeof data === "number" ? data : 0;
+  if (deletedCount > 0) {
+    await admin.rpc("increment_deleted_short_links", { amount: deletedCount });
+  }
+
+  return NextResponse.json({ deleted: deletedCount });
 }
 
 export async function GET() {

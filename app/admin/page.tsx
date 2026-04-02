@@ -17,12 +17,8 @@ type AdminLink = {
 
 type LinksResponse = {
   links?: AdminLink[];
+  deletedCount?: number;
   error?: string;
-};
-
-type MutationResponse = {
-  error?: string;
-  deleted?: number;
 };
 
 const supabase = createBrowserSupabaseClient();
@@ -68,11 +64,20 @@ function getStatus(link: AdminLink) {
     return { label: "비활성", className: "inactive" };
   }
 
-  if (link.expires_at && new Date(link.expires_at).getTime() <= Date.now()) {
-    return { label: "만료", className: "expired" };
+  if (!link.expires_at) {
+    return { label: "무기한", className: "active" };
   }
 
-  return { label: "활성", className: "active" };
+  const expiresAtMs = new Date(link.expires_at).getTime();
+  if (Number.isNaN(expiresAtMs)) {
+    return { label: "무기한", className: "active" };
+  }
+
+  if (expiresAtMs <= Date.now()) {
+    return { label: "만료됨", className: "expired" };
+  }
+
+  return { label: "만료 예정", className: "pending" };
 }
 
 export default function AdminPage() {
@@ -80,6 +85,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [links, setLinks] = useState<AdminLink[]>([]);
+  const [deletedCount, setDeletedCount] = useState(0);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBooting, setIsBooting] = useState(true);
@@ -118,6 +124,7 @@ export default function AdminPage() {
     if (!session?.access_token) {
       setLinks([]);
       setSelectedIds([]);
+      setDeletedCount(0);
       return;
     }
 
@@ -141,6 +148,7 @@ export default function AdminPage() {
       }
 
       setLinks(data.links ?? []);
+      setDeletedCount(data.deletedCount ?? 0);
       setSelectedIds([]);
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : "링크 목록을 불러오지 못했습니다.";
@@ -241,7 +249,7 @@ export default function AdminPage() {
         body: JSON.stringify({ ids: selectedIds }),
       });
 
-      const data = (await response.json()) as MutationResponse;
+      const data = (await response.json()) as { error?: string; deleted?: number };
       if (!response.ok) {
         throw new Error(data.error ?? "선택한 링크를 삭제하지 못했습니다.");
       }
@@ -290,6 +298,17 @@ export default function AdminPage() {
     filteredLinks.length > 0 && filteredLinks.every((link) => selectedIds.includes(link.id));
 
   const selectedVisibleCount = filteredLinks.filter((link) => selectedIds.includes(link.id)).length;
+  const activeCount = links.filter((link) => link.is_active).length;
+  const expiringCount = links.filter((link) => {
+    if (!link.expires_at) return false;
+    const expiresAtMs = new Date(link.expires_at).getTime();
+    return Number.isFinite(expiresAtMs) && expiresAtMs > Date.now();
+  }).length;
+  const expiredCount = links.filter((link) => {
+    if (!link.expires_at) return false;
+    const expiresAtMs = new Date(link.expires_at).getTime();
+    return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
+  }).length;
 
   function toggleSelectAll() {
     if (!filteredLinks.length) return;
@@ -383,11 +402,6 @@ export default function AdminPage() {
     );
   }
 
-  const activeCount = links.filter((link) => link.is_active).length;
-  const expiredCount = links.filter(
-    (link) => link.expires_at && new Date(link.expires_at).getTime() <= Date.now(),
-  ).length;
-
   return (
     <main className="admin-shell">
       <section className="admin-card">
@@ -429,8 +443,12 @@ export default function AdminPage() {
             <span>활성</span>
           </div>
           <div className="summary-card">
+            <strong>{expiringCount}</strong>
+            <span>만료 예정</span>
+          </div>
+          <div className="summary-card">
             <strong>{expiredCount}</strong>
-            <span>만료</span>
+            <span>만료됨</span>
           </div>
           <div className="summary-card">
             <strong>{selectedIds.length}</strong>
@@ -546,6 +564,20 @@ export default function AdminPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="admin-footer-banner">
+          <div className="banner-card">
+            <span className="banner-label">현재 생성된 주소</span>
+            <strong>{links.length}</strong>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">자동 삭제됨</span>
+            <strong>{deletedCount}</strong>
+          </div>
+          <div className="banner-note">
+            만료된 링크는 접속 또는 정리 작업에서 자동으로 삭제되고, 삭제 수는 누적됩니다.
+          </div>
         </div>
       </section>
     </main>

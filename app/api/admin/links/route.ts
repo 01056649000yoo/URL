@@ -16,7 +16,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ links: data ?? [] });
+    let deletedCount = 0;
+    try {
+      const statsResult = await admin
+        .from("short_link_stats")
+        .select("total_deleted")
+        .eq("key", "global")
+        .maybeSingle();
+      deletedCount = statsResult.data?.total_deleted ?? 0;
+    } catch {
+      deletedCount = 0;
+    }
+
+    return NextResponse.json({
+      links: data ?? [],
+      deletedCount,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
     return NextResponse.json({ error: message }, { status: 401 });

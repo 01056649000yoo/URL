@@ -15,6 +15,15 @@ add column if not exists expires_at timestamptz;
 create index if not exists short_links_expires_at_idx
 on public.short_links (expires_at);
 
+create table if not exists public.short_link_stats (
+  key text primary key,
+  total_deleted integer not null default 0
+);
+
+insert into public.short_link_stats (key, total_deleted)
+values ('global', 0)
+on conflict (key) do nothing;
+
 alter table public.short_links enable row level security;
 
 drop policy if exists "allow public read active short links" on public.short_links;
@@ -49,5 +58,22 @@ begin
 
   get diagnostics deleted_count = row_count;
   return deleted_count;
+end;
+$$;
+
+create or replace function public.increment_deleted_short_links(amount integer)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  update public.short_link_stats
+  set total_deleted = total_deleted + greatest(coalesce(amount, 0), 0)
+  where key = 'global';
+
+  if not found then
+    insert into public.short_link_stats (key, total_deleted)
+    values ('global', greatest(coalesce(amount, 0), 0));
+  end if;
 end;
 $$;
