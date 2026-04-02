@@ -57,7 +57,12 @@ export default function HomePage() {
 
   const qrImageUrl = useMemo(() => {
     if (!resultUrl) return "";
-    return `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=10&data=${encodeURIComponent(resultUrl)}`;
+    return `/api/qr?size=360&margin=10&data=${encodeURIComponent(resultUrl)}`;
+  }, [resultUrl]);
+
+  const qrDownloadUrl = useMemo(() => {
+    if (!resultUrl) return "";
+    return `/api/qr?size=1200&margin=20&data=${encodeURIComponent(resultUrl)}`;
   }, [resultUrl]);
 
   useEffect(() => {
@@ -287,6 +292,9 @@ export default function HomePage() {
             <button className="qr-close" type="button" onClick={() => setIsQrOpen(false)} aria-label="QR 코드 닫기">
               닫기
             </button>
+            <a className="qr-download" href={qrDownloadUrl} download={`samlink-qr-${result?.slug ?? "code"}.png`}>
+              다운로드
+            </a>
             <p className="qr-modal-title">단축링크 QR 코드</p>
             <img className="qr-modal-image" src={qrImageUrl} alt="단축링크 QR 코드 크게 보기" />
             <p className="qr-modal-link">{resultUrl}</p>
