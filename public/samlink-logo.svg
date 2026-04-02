@@ -1,15 +1,26 @@
-<svg width="260" height="72" viewBox="0 0 260 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="샘링크 로고">
+<svg width="320" height="92" viewBox="0 0 320 92" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="샘링크 로고">
   <defs>
-    <linearGradient id="badge" x1="4" y1="4" x2="68" y2="68" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FF7FA8"/>
-      <stop offset="1" stop-color="#4F6CFB"/>
+    <linearGradient id="icon" x1="10" y1="12" x2="78" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6"/>
+      <stop offset="0.52" stop-color="#C16AE0"/>
+      <stop offset="1" stop-color="#57C3E8"/>
     </linearGradient>
-    <linearGradient id="wordmark" x1="76" y1="18" x2="240" y2="54" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#214AD8"/>
-      <stop offset="1" stop-color="#2DD4BF"/>
+    <linearGradient id="word" x1="92" y1="30" x2="212" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18233D"/>
+      <stop offset="1" stop-color="#23335E"/>
+    </linearGradient>
+    <linearGradient id="subtitle" x1="92" y1="62" x2="220" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5B647B"/>
+      <stop offset="1" stop-color="#7A849D"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="64" height="64" rx="22" fill="url(#badge)"/>
-  <path d="M25 23H37.7C42.7 23 46.6 26.8 46.6 31.7C46.6 35.3 44.6 38.4 41.5 39.9L47.6 49H39.2L34 40.7H31V49H25V23ZM31 28.3V35.6H37.2C39.4 35.6 40.9 34.1 40.9 31.9C40.9 29.9 39.3 28.3 37.2 28.3H31Z" fill="white"/>
-  <text x="86" y="47" fill="url(#wordmark)" font-size="30" font-weight="900" font-family="Noto Sans KR, Apple SD Gothic Neo, Segoe UI, sans-serif" letter-spacing="-1.5">샘링크</text>
+  <rect width="320" height="92" rx="24" fill="white" fill-opacity="0.01"/>
+  <g transform="translate(6 8)">
+    <rect x="0" y="10" width="64" height="64" rx="22" fill="url(#icon)"/>
+    <path d="M32.9 17c8.6 0 12.8 4.4 12.8 10.2 0 4.7-2.8 8.1-7.5 9.4-3 .9-3.2 2.5-1.3 4l1.4 1.2c5.5 4.5 7.6 8 7.6 12.2 0 7.6-6 12.6-14.7 12.6-6.5 0-12.4-2.8-16.3-7.7l5.7-4.6c3 3.8 6.9 5.8 11.2 5.8 4.7 0 7.8-2.4 7.8-5.8 0-2.2-1.3-4.1-4.6-6.8l-1.2-1c-4.5-3.7-5.7-6.9-4.7-10.1 1.3-4.1 5.1-6.7 9.7-7.2 3.4-.4 5.4-1.9 5.4-4.8 0-2.8-2.2-4.9-6.5-4.9-4.2 0-8.1 1.7-11 4.9l-4.8-5.3C19 19.2 25.3 17 32.9 17Z" fill="white"/>
+  </g>
+  <g transform="translate(92 24)">
+    <text x="0" y="28" fill="url(#word)" font-size="31" font-weight="900" font-family="Noto Sans KR, Apple SD Gothic Neo, Segoe UI, sans-serif" letter-spacing="-1.6">샘링크</text>
+    <text x="0" y="55" fill="url(#subtitle)" font-size="13.5" font-weight="700" font-family="Noto Sans KR, Apple SD Gothic Neo, Segoe UI, sans-serif" letter-spacing="-0.2">교육용 URL 단축 서비스</text>
+  </g>
 </svg>
