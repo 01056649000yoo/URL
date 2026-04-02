@@ -123,8 +123,8 @@ as $$
 declare
   minute_bucket_start timestamptz;
   day_bucket_start timestamptz;
-  minute_limit constant integer := 12;
-  day_limit constant integer := 50;
+  minute_limit constant integer := 3;
+  day_limit constant integer := 20;
   now_utc timestamptz := timezone('utc', now());
 begin
   minute_bucket_start := timezone(
