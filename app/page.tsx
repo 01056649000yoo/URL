@@ -16,6 +16,13 @@ type ErrorResult = {
   error?: string;
 };
 
+type StatsResult = {
+  totalCount?: number;
+  activeCount?: number;
+  deletedCount?: number;
+  error?: string;
+};
+
 type RetentionPeriod = "day" | "week" | "month";
 
 const BRAND_DOMAIN = "샘링크.kr";
@@ -38,6 +45,11 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [copyLabel, setCopyLabel] = useState("복사");
   const [isQrOpen, setIsQrOpen] = useState(false);
+  const [stats, setStats] = useState({
+    totalCount: 0,
+    activeCount: 0,
+    deletedCount: 0,
+  });
 
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
 
@@ -58,6 +70,35 @@ export default function HomePage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isQrOpen]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadStats() {
+      try {
+        const response = await fetch("/api/stats");
+        const data = (await response.json()) as StatsResult;
+
+        if (!mounted || !response.ok) {
+          return;
+        }
+
+        setStats({
+          totalCount: data.totalCount ?? 0,
+          activeCount: data.activeCount ?? 0,
+          deletedCount: data.deletedCount ?? 0,
+        });
+      } catch {
+        // 통계는 보조 정보이므로 조용히 무시합니다.
+      }
+    }
+
+    void loadStats();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -211,6 +252,24 @@ export default function HomePage() {
         <div className="help">
           <div className="help-chip">기본 코드 길이 4자리</div>
           <p>자동 생성 코드는 4자리로 만들고, 선택한 기간이 지나면 DB에서 자동으로 정리됩니다.</p>
+        </div>
+
+        <div className="public-footer-banner" aria-label="샘링크 통계">
+          <div className="banner-card">
+            <span className="banner-label">현재 생성된 주소</span>
+            <strong>{stats.totalCount}</strong>
+            <span className="banner-subtext">전체 등록 수</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">현재 이용자 수</span>
+            <strong>{stats.activeCount}</strong>
+            <span className="banner-subtext">활성 링크 기준</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">자동 삭제됨</span>
+            <strong>{stats.deletedCount}</strong>
+            <span className="banner-subtext">만료 후 정리된 수</span>
+          </div>
         </div>
       </section>
 

@@ -309,6 +309,13 @@ export default function AdminPage() {
     const expiresAtMs = new Date(link.expires_at).getTime();
     return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
   }).length;
+  const liveCount = links.filter((link) => {
+    if (!link.is_active) return false;
+    if (!link.expires_at) return true;
+
+    const expiresAtMs = new Date(link.expires_at).getTime();
+    return Number.isFinite(expiresAtMs) && expiresAtMs > Date.now();
+  }).length;
 
   function toggleSelectAll() {
     if (!filteredLinks.length) return;
@@ -572,8 +579,14 @@ export default function AdminPage() {
             <strong>{links.length}</strong>
           </div>
           <div className="banner-card">
+            <span className="banner-label">현재 이용자 수</span>
+            <strong>{liveCount}</strong>
+            <span className="banner-subtext">활성 링크 기준</span>
+          </div>
+          <div className="banner-card">
             <span className="banner-label">자동 삭제됨</span>
             <strong>{deletedCount}</strong>
+            <span className="banner-subtext">누적 삭제 수</span>
           </div>
           <div className="banner-note">
             만료된 링크는 접속 또는 정리 작업에서 자동으로 삭제되고, 삭제 수는 누적됩니다.

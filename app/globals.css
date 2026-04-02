@@ -592,7 +592,8 @@ input {
   color: var(--muted);
 }
 
-.admin-footer-banner {
+.admin-footer-banner,
+.public-footer-banner {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
@@ -618,6 +619,12 @@ input {
 .banner-card strong {
   font-size: 1.7rem;
   color: var(--text);
+}
+
+.banner-subtext {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
 }
 
 .banner-note {
@@ -750,7 +757,8 @@ input {
     min-width: 760px;
   }
 
-  .admin-footer-banner {
+  .admin-footer-banner,
+  .public-footer-banner {
     grid-template-columns: 1fr;
   }
 }
