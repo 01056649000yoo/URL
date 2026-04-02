@@ -1,11 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 type CreateResult = {
   shortUrl: string;
+  displayShortUrl?: string;
   slug: string;
   destination: string;
+  expiresAt?: string;
+  retentionDays?: number;
 };
 
 type ErrorResult = {
@@ -15,11 +18,29 @@ type ErrorResult = {
 const BRAND_NAME = "쌤링크";
 const BRAND_DOMAIN = "쌤링크.kr";
 
+function formatDateTime(value?: string) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
   const [error, setError] = useState("");
   const [copyLabel, setCopyLabel] = useState("복사");
+
+  const resultUrl = useMemo(() => result?.displayShortUrl ?? result?.shortUrl ?? "", [result]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,6 +54,7 @@ export default function HomePage() {
     const payload = {
       destination: String(formData.get("destination") ?? ""),
       adminToken: String(formData.get("adminToken") ?? ""),
+      retentionDays: Number(formData.get("retentionDays") ?? 7),
     };
 
     try {
@@ -68,12 +90,12 @@ export default function HomePage() {
   }
 
   async function handleCopy() {
-    if (!result) {
+    if (!resultUrl) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(result.shortUrl);
+      await navigator.clipboard.writeText(resultUrl);
       setCopyLabel("복사됨");
       window.setTimeout(() => setCopyLabel("복사"), 1600);
     } catch {
@@ -108,16 +130,31 @@ export default function HomePage() {
             />
           </label>
 
-          <label className="label">
-            <span>관리자 토큰</span>
-            <input
-              className="field"
-              name="adminToken"
-              type="password"
-              placeholder="관리자 토큰을 입력해 주세요"
-              required
-            />
-          </label>
+          <div className="row">
+            <label className="label">
+              <span>유지 기간(일)</span>
+              <input
+                className="field"
+                name="retentionDays"
+                type="number"
+                min={1}
+                max={365}
+                defaultValue={7}
+                required
+              />
+            </label>
+
+            <label className="label">
+              <span>관리자 토큰</span>
+              <input
+                className="field"
+                name="adminToken"
+                type="password"
+                placeholder="관리자 토큰을 입력해 주세요"
+                required
+              />
+            </label>
+          </div>
 
           <button className="submit" type="submit" disabled={isSubmitting}>
             {isSubmitting ? "링크 만드는 중..." : "단축 링크 만들기"}
@@ -131,22 +168,28 @@ export default function HomePage() {
           </div>
 
           {result ? (
-            <div className="result-row">
-              <a className="result-link" href={result.shortUrl} target="_blank" rel="noreferrer">
-                {result.shortUrl}
-              </a>
-              <button
-                className="copy-button"
-                type="button"
-                onClick={handleCopy}
-                aria-label="단축 링크 복사"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M9 9a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z" />
-                  <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
-                </svg>
-                <span>{copyLabel}</span>
-              </button>
+            <div className="result-stack">
+              <div className="result-row">
+                <a className="result-link" href={result.shortUrl} target="_blank" rel="noreferrer">
+                  {resultUrl}
+                </a>
+                <button
+                  className="copy-button"
+                  type="button"
+                  onClick={handleCopy}
+                  aria-label="단축 링크 복사"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 9a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z" />
+                    <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  <span>{copyLabel}</span>
+                </button>
+              </div>
+
+              {result.expiresAt ? (
+                <p className="result-meta">만료 예정: {formatDateTime(result.expiresAt)}</p>
+              ) : null}
             </div>
           ) : (
             <p className="empty-result">
@@ -160,7 +203,7 @@ export default function HomePage() {
         <div className="help">
           <div className="help-chip">기본 코드 길이 4자</div>
           <p>
-            자동 생성 코드는 4자리로 만들어지고, 복사 버튼으로 바로 전달할 수 있습니다.
+            자동 생성 코드는 4자리로 만들어지고, 설정한 기간이 지나면 DB에서 자동 정리됩니다.
           </p>
         </div>
       </section>

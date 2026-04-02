@@ -2,13 +2,25 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateSlug, normalizeSlug } from "@/lib/slug";
 import { getBaseUrl } from "@/lib/site-url";
+import { domainToUnicode } from "node:url";
 
 type CreateLinkPayload = {
   destination?: string;
   slug?: string;
   adminToken?: string;
   createdBy?: string;
+  retentionDays?: number;
 };
+
+function toDisplayUrl(shortUrl: string) {
+  try {
+    const parsed = new URL(shortUrl);
+    const unicodeHost = domainToUnicode(parsed.hostname) || parsed.hostname;
+    return `${parsed.protocol}//${unicodeHost}${parsed.port ? `:${parsed.port}` : ""}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return shortUrl;
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -17,6 +29,7 @@ export async function POST(request: Request) {
     const suppliedSlug = body.slug?.trim();
     const adminToken = body.adminToken?.trim();
     const createdBy = body.createdBy?.trim() || null;
+    const retentionDays = Number(body.retentionDays ?? 7);
 
     if (!destination) {
       return NextResponse.json({ error: "원본 주소를 입력해 주세요." }, { status: 400 });
@@ -47,6 +60,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "관리자 토큰이 올바르지 않습니다." }, { status: 401 });
     }
 
+    if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 365) {
+      return NextResponse.json(
+        { error: "유지 기간은 1일 이상 365일 이하로 입력해 주세요." },
+        { status: 400 },
+      );
+    }
+
     let slug: string;
     try {
       slug = suppliedSlug ? normalizeSlug(suppliedSlug) : generateSlug();
@@ -58,14 +78,17 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+    const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000).toISOString();
+
     const { data, error } = await admin
       .from("short_links")
       .insert({
         slug,
         destination: parsedUrl.toString(),
         created_by: createdBy,
+        expires_at: expiresAt,
       })
-      .select("slug, destination")
+      .select("slug, destination, expires_at")
       .single();
 
     if (error) {
@@ -86,6 +109,9 @@ export async function POST(request: Request) {
       slug: data.slug,
       destination: data.destination,
       shortUrl,
+      displayShortUrl: toDisplayUrl(shortUrl),
+      expiresAt: data.expires_at,
+      retentionDays,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
