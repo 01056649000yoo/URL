@@ -110,6 +110,8 @@ begin
 end;
 $$;
 
+drop function if exists public.consume_short_link_rate_limit(text);
+
 create or replace function public.consume_short_link_rate_limit(p_ip_hash text)
 returns table (
   allowed boolean,
