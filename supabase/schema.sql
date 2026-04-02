@@ -174,8 +174,8 @@ as $$
 declare
   minute_bucket_start timestamptz;
   day_bucket_start timestamptz;
-  minute_limit constant integer := 10;
-  day_limit constant integer := 100;
+  minute_limit constant integer := 5;
+  day_limit constant integer := 20;
   global_day_limit constant integer := 1000;
   today_created integer := 0;
   today date := timezone('utc', now())::date;
