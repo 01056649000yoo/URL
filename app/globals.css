@@ -391,6 +391,12 @@ input {
   color: white;
 }
 
+.copy-inline-button {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
 .mini-button.danger {
   background: #ef4444;
 }

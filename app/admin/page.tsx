@@ -26,7 +26,7 @@ type MutationResponse = {
 };
 
 const supabase = createBrowserSupabaseClient();
-const SITE_LABEL = "쌤링크.kr";
+const SITE_LABEL = "샘링크.kr";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
@@ -75,6 +75,10 @@ function getStatus(link: AdminLink) {
   return { label: "활성", className: "active" };
 }
 
+function copyText(value: string) {
+  return navigator.clipboard.writeText(value);
+}
+
 export default function AdminPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
@@ -85,6 +89,7 @@ export default function AdminPage() {
   const [isBooting, setIsBooting] = useState(true);
   const [isLoadingLinks, setIsLoadingLinks] = useState(false);
   const [busyIds, setBusyIds] = useState<number[]>([]);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const [authError, setAuthError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -311,11 +316,22 @@ export default function AdminPage() {
     );
   }
 
+  async function copyShortUrl(link: AdminLink) {
+    const shortUrl = `${SITE_LABEL}/${link.slug}`;
+    try {
+      await copyText(shortUrl);
+      setCopiedId(link.id);
+      window.setTimeout(() => setCopiedId((current) => (current === link.id ? null : current)), 1400);
+    } catch {
+      setMessage("짧은 주소 복사에 실패했습니다.");
+    }
+  }
+
   if (isBooting) {
     return (
       <main className="admin-shell">
         <section className="admin-card">
-          <p className="eyebrow">쌤링크 관리자</p>
+          <p className="eyebrow">샘링크 관리자</p>
           <h1>불러오는 중...</h1>
         </section>
       </main>
@@ -328,7 +344,7 @@ export default function AdminPage() {
         <section className="admin-card admin-login">
           <div>
             <p className="eyebrow">관리자 로그인</p>
-            <h1>쌤링크 관리자</h1>
+            <h1>샘링크 관리자</h1>
             <p className="lead">
               Supabase Auth로 로그인한 뒤 생성 이력과 상태를 한 번에 관리할 수 있습니다.
             </p>
@@ -381,7 +397,7 @@ export default function AdminPage() {
       <section className="admin-card">
         <div className="admin-header">
           <div>
-            <p className="eyebrow">쌤링크 관리자</p>
+            <p className="eyebrow">샘링크 관리자</p>
             <h1>생성 이력 관리</h1>
             <p className="lead">{session.user.email}로 로그인되었습니다.</p>
           </div>
@@ -474,6 +490,8 @@ export default function AdminPage() {
                 filteredLinks.map((link) => {
                   const status = getStatus(link);
                   const rowSelected = selectedIds.includes(link.id);
+                  const shortUrl = `${SITE_LABEL}/${link.slug}`;
+                  const copied = copiedId === link.id;
 
                   return (
                     <tr key={link.id} className={rowSelected ? "table-row-selected" : undefined}>
@@ -485,8 +503,15 @@ export default function AdminPage() {
                         />
                       </td>
                       <td>
-                        <div className="table-url">{`${SITE_LABEL}/${link.slug}`}</div>
+                        <div className="table-url">{shortUrl}</div>
                         <div className="table-sub">{link.created_by ?? "-"}</div>
+                        <button
+                          className="mini-button copy-inline-button"
+                          type="button"
+                          onClick={() => copyShortUrl(link)}
+                        >
+                          {copied ? "복사됨" : "복사"}
+                        </button>
                       </td>
                       <td className="table-destination">{link.destination}</td>
                       <td>{formatDateTime(link.expires_at)}</td>
