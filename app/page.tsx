@@ -18,7 +18,6 @@ type ErrorResult = {
 
 type RetentionPeriod = "day" | "week" | "month";
 
-const BRAND_NAME = "샘링크";
 const BRAND_DOMAIN = "샘링크.kr";
 
 function formatDateTime(value?: string) {
@@ -130,17 +129,11 @@ export default function HomePage() {
             className="brand-logo"
             src="/samlink-logo.svg"
             alt="샘링크 로고"
-            width={180}
-            height={50}
+            width={320}
+            height={92}
             priority
           />
         </header>
-
-        <div className="intro">
-          <p className="eyebrow">{BRAND_NAME}</p>
-          <h1>수업 링크를 짧게</h1>
-          <p className="lead lead-highlight">선생님 수업 자료 링크를 한 줄로 가볍게 줄여드려요.</p>
-        </div>
 
         <form className="stack" onSubmit={handleSubmit}>
           <label className="label">
@@ -208,7 +201,7 @@ export default function HomePage() {
             </div>
           ) : (
             <p className="empty-result">
-              아직 생성된 링크가 없습니다. 주소를 입력하면 {BRAND_NAME}가 바로 짧은 주소로 바꿔드립니다.
+              아직 생성된 링크가 없습니다. 주소를 입력하면 바로 짧은 주소로 바꿔드립니다.
             </p>
           )}
         </section>
@@ -223,7 +216,13 @@ export default function HomePage() {
 
       {isQrOpen && resultUrl ? (
         <div className="qr-overlay" role="presentation" onClick={() => setIsQrOpen(false)}>
-          <div className="qr-modal" role="dialog" aria-modal="true" aria-label="QR 코드 크게 보기" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="qr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="QR 코드 크게 보기"
+            onClick={(event) => event.stopPropagation()}
+          >
             <button className="qr-close" type="button" onClick={() => setIsQrOpen(false)} aria-label="QR 코드 닫기">
               닫기
             </button>
