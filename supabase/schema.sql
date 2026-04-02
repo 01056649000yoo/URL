@@ -127,7 +127,7 @@ declare
   created_delta integer := greatest(coalesce(amount, 0), 0);
   today_created integer := 0;
   alert_key text := format('daily-spike-%s', today::text);
-  alert_threshold constant integer := 50;
+  alert_threshold constant integer := 300;
 begin
   update public.short_link_stats
   set total_created = total_created + greatest(coalesce(amount, 0), 0)
@@ -174,9 +174,9 @@ as $$
 declare
   minute_bucket_start timestamptz;
   day_bucket_start timestamptz;
-  minute_limit constant integer := 3;
-  day_limit constant integer := 20;
-  global_day_limit constant integer := 100;
+  minute_limit constant integer := 10;
+  day_limit constant integer := 100;
+  global_day_limit constant integer := 1000;
   today_created integer := 0;
   today date := timezone('utc', now())::date;
   now_utc timestamptz := timezone('utc', now());
@@ -243,7 +243,7 @@ language plpgsql
 security definer
 as $$
 declare
-  max_rows constant integer := 3000;
+  max_rows constant integer := 50000;
   current_rows integer := 0;
 begin
   select count(*) into current_rows
