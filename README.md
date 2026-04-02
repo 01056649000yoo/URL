@@ -1,17 +1,16 @@
-# Private Short Links
+# 쌤링크
 
-지인끼리 쓸 수 있는 가벼운 URL 단축 서비스입니다.  
-배포는 Vercel, 데이터 저장은 Supabase Postgres 기준으로 구성했습니다.
+작은 그룹용 URL 단축기입니다. Vercel에서 호스팅하고, Supabase Postgres와 Supabase Auth로 관리합니다.
 
-## 구조
+## 주요 기능
 
-- `Next.js` 앱을 Vercel에 배포
-- `Supabase`의 `short_links` 테이블에 링크 저장
-- `POST /api/shorten` 에서 새 단축 링크 생성
-- `GET /[slug]` 에서 원본 URL로 리다이렉트
-- 링크 생성은 `SHORTENER_ADMIN_TOKEN` 으로 보호
+- 원본 주소를 짧은 링크로 변환
+- 4자리 코드 자동 생성
+- 유지 기간 선택: `1일`, `1주일`, `1달`
+- 만료된 링크는 DB에서 자동 정리
+- `/admin` 에서 생성 이력 조회, 비활성화, 삭제
 
-## 로컬 실행
+## 실행 준비
 
 1. 의존성 설치
 
@@ -19,41 +18,43 @@
 npm install
 ```
 
-2. 환경변수 준비
+2. 환경변수 설정
 
-`.env.example` 을 `.env.local` 로 복사한 뒤 값을 채웁니다.
+`.env.example`을 `.env.local`로 복사한 뒤 값을 채웁니다.
 
 ```env
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_SITE_URL=https://샘링크.kr
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
+ADMIN_EMAIL=admin@example.com
 SHORTENER_ADMIN_TOKEN=...
 ```
 
-3. Supabase SQL 실행
+3. Supabase 스키마 실행
 
-`supabase/schema.sql` 내용을 SQL Editor에서 실행합니다.
+Supabase SQL Editor에서 [supabase/schema.sql](./supabase/schema.sql)을 실행합니다.
 
-4. 개발 서버 시작
+4. 관리자 계정 생성
+
+Supabase Dashboard의 `Auth` > `Users`에서 `ADMIN_EMAIL`과 같은 이메일을 가진 계정을 하나 만듭니다.
+
+5. 개발 서버 실행
 
 ```bash
 npm run dev
 ```
 
-## Vercel 배포 시 설정할 환경변수
+## 관리자 페이지
 
-- `NEXT_PUBLIC_SITE_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SHORTENER_ADMIN_TOKEN`
+- 주소: `/admin`
+- Supabase Auth 이메일/비밀번호로 로그인
+- 링크 목록, 클릭 수, 만료일, 상태 확인
+- 링크 비활성화, 복원, 삭제 가능
 
-`NEXT_PUBLIC_SITE_URL` 은 배포 도메인으로 맞추는 것이 안전합니다. 예: `https://go.yourdomain.com`
+## 배포 메모
 
-## 다음 확장 추천
+- Vercel `Environment Variables`에 위 환경변수를 넣습니다.
+- `NEXT_PUBLIC_SITE_URL`은 실제 도메인으로 맞춥니다.
+- `ADMIN_EMAIL`은 관리자 계정 이메일과 같아야 합니다.
 
-- 클릭 로그를 별도 테이블로 분리해서 최근 유입 보기
-- 링크별 만료일과 비활성화 스위치 추가
-- 지인별 접근 권한이 필요하면 Supabase Auth 도입
-- 관리자 화면에서 링크 목록/삭제/수정 기능 추가
