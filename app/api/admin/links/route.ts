@@ -17,19 +17,23 @@ export async function GET(request: Request) {
     }
 
     let deletedCount = 0;
+    let createdCount = 0;
     try {
       const statsResult = await admin
         .from("short_link_stats")
-        .select("total_deleted")
+        .select("total_created, total_deleted")
         .eq("key", "global")
         .maybeSingle();
+      createdCount = statsResult.data?.total_created ?? 0;
       deletedCount = statsResult.data?.total_deleted ?? 0;
     } catch {
+      createdCount = 0;
       deletedCount = 0;
     }
 
     return NextResponse.json({
       links: data ?? [],
+      createdCount,
       deletedCount,
     });
   } catch (error) {

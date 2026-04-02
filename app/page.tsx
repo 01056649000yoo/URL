@@ -18,6 +18,7 @@ type ErrorResult = {
 
 type StatsResult = {
   totalCount?: number;
+  createdCount?: number;
   activeCount?: number;
   deletedCount?: number;
   error?: string;
@@ -47,6 +48,7 @@ export default function HomePage() {
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [stats, setStats] = useState({
     totalCount: 0,
+    createdCount: 0,
     activeCount: 0,
     deletedCount: 0,
   });
@@ -85,6 +87,7 @@ export default function HomePage() {
 
         setStats({
           totalCount: data.totalCount ?? 0,
+          createdCount: data.createdCount ?? 0,
           activeCount: data.activeCount ?? 0,
           deletedCount: data.deletedCount ?? 0,
         });
@@ -256,9 +259,9 @@ export default function HomePage() {
 
         <div className="public-footer-banner" aria-label="샘링크 통계">
           <div className="banner-card">
-            <span className="banner-label">현재 생성된 주소</span>
-            <strong>{stats.totalCount}</strong>
-            <span className="banner-subtext">전체 등록 수</span>
+            <span className="banner-label">누적 생성 주소</span>
+            <strong>{stats.createdCount}</strong>
+            <span className="banner-subtext">삭제된 주소까지 포함</span>
           </div>
           <div className="banner-card">
             <span className="banner-label">활성 링크 수</span>

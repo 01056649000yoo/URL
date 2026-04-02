@@ -17,6 +17,7 @@ type AdminLink = {
 
 type LinksResponse = {
   links?: AdminLink[];
+  createdCount?: number;
   deletedCount?: number;
   error?: string;
 };
@@ -85,6 +86,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [links, setLinks] = useState<AdminLink[]>([]);
+  const [createdCount, setCreatedCount] = useState(0);
   const [deletedCount, setDeletedCount] = useState(0);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -123,6 +125,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!session?.access_token) {
       setLinks([]);
+      setCreatedCount(0);
       setSelectedIds([]);
       setDeletedCount(0);
       return;
@@ -148,6 +151,7 @@ export default function AdminPage() {
       }
 
       setLinks(data.links ?? []);
+      setCreatedCount(data.createdCount ?? 0);
       setDeletedCount(data.deletedCount ?? 0);
       setSelectedIds([]);
     } catch (caught) {
@@ -575,8 +579,9 @@ export default function AdminPage() {
 
         <div className="admin-footer-banner">
           <div className="banner-card">
-            <span className="banner-label">현재 생성된 주소</span>
-            <strong>{links.length}</strong>
+            <span className="banner-label">누적 생성 주소</span>
+            <strong>{createdCount}</strong>
+            <span className="banner-subtext">삭제된 주소까지 포함</span>
           </div>
           <div className="banner-card">
             <span className="banner-label">활성 링크 수</span>

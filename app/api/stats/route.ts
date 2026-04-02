@@ -27,7 +27,7 @@ export async function GET() {
       admin.from("short_links").select("is_active, expires_at"),
       admin
         .from("short_link_stats")
-        .select("total_deleted")
+        .select("total_created, total_deleted")
         .eq("key", "global")
         .maybeSingle(),
     ]);
@@ -38,10 +38,12 @@ export async function GET() {
 
     const totalCount = links?.length ?? 0;
     const activeCount = (links ?? []).filter(isLiveLink).length;
+    const createdCount = statsResult.data?.total_created ?? 0;
     const deletedCount = statsResult.data?.total_deleted ?? 0;
 
     return NextResponse.json({
       totalCount,
+      createdCount,
       activeCount,
       deletedCount,
     });

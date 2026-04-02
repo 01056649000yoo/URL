@@ -17,11 +17,15 @@ on public.short_links (expires_at);
 
 create table if not exists public.short_link_stats (
   key text primary key,
+  total_created integer not null default 0,
   total_deleted integer not null default 0
 );
 
-insert into public.short_link_stats (key, total_deleted)
-values ('global', 0)
+alter table public.short_link_stats
+add column if not exists total_created integer not null default 0;
+
+insert into public.short_link_stats (key, total_created, total_deleted)
+values ('global', 0, 0)
 on conflict (key) do nothing;
 
 alter table public.short_links enable row level security;
@@ -74,6 +78,23 @@ begin
   if not found then
     insert into public.short_link_stats (key, total_deleted)
     values ('global', greatest(coalesce(amount, 0), 0));
+  end if;
+end;
+$$;
+
+create or replace function public.increment_created_short_links(amount integer)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  update public.short_link_stats
+  set total_created = total_created + greatest(coalesce(amount, 0), 0)
+  where key = 'global';
+
+  if not found then
+    insert into public.short_link_stats (key, total_created, total_deleted)
+    values ('global', greatest(coalesce(amount, 0), 0), 0);
   end if;
 end;
 $$;
