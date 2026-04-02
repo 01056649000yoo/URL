@@ -18,8 +18,19 @@ type AdminLink = {
 type LinksResponse = {
   links?: AdminLink[];
   createdCount?: number;
+  todayCreated?: number;
+  todayDeleted?: number;
   deletedCount?: number;
+  alerts?: AdminAlert[];
   error?: string;
+};
+
+type AdminAlert = {
+  alert_key: string;
+  kind: string;
+  title: string;
+  message: string;
+  created_at: string;
 };
 
 const supabase = createBrowserSupabaseClient();
@@ -87,7 +98,10 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [links, setLinks] = useState<AdminLink[]>([]);
   const [createdCount, setCreatedCount] = useState(0);
+  const [todayCreated, setTodayCreated] = useState(0);
+  const [todayDeleted, setTodayDeleted] = useState(0);
   const [deletedCount, setDeletedCount] = useState(0);
+  const [alerts, setAlerts] = useState<AdminAlert[]>([]);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBooting, setIsBooting] = useState(true);
@@ -126,8 +140,11 @@ export default function AdminPage() {
     if (!session?.access_token) {
       setLinks([]);
       setCreatedCount(0);
+      setTodayCreated(0);
+      setTodayDeleted(0);
       setSelectedIds([]);
       setDeletedCount(0);
+      setAlerts([]);
       return;
     }
 
@@ -152,7 +169,10 @@ export default function AdminPage() {
 
       setLinks(data.links ?? []);
       setCreatedCount(data.createdCount ?? 0);
+      setTodayCreated(data.todayCreated ?? 0);
+      setTodayDeleted(data.todayDeleted ?? 0);
       setDeletedCount(data.deletedCount ?? 0);
+      setAlerts(data.alerts ?? []);
       setSelectedIds([]);
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : "링크 목록을 불러오지 못했습니다.";
@@ -454,6 +474,10 @@ export default function AdminPage() {
             <span>활성</span>
           </div>
           <div className="summary-card">
+            <strong>{todayCreated}</strong>
+            <span>오늘 생성</span>
+          </div>
+          <div className="summary-card">
             <strong>{expiringCount}</strong>
             <span>만료 예정</span>
           </div>
@@ -466,6 +490,23 @@ export default function AdminPage() {
             <span>선택됨</span>
           </div>
         </div>
+
+        {alerts.length ? (
+          <div className="admin-alert-banner">
+            <div className="admin-alert-header">
+              <strong>요청 관찰 알림</strong>
+              <span>최근 생성량이 평소보다 많습니다</span>
+            </div>
+            <div className="admin-alert-list">
+              {alerts.map((alert) => (
+                <div className="admin-alert-item" key={alert.alert_key}>
+                  <strong>{alert.title}</strong>
+                  <p>{alert.message}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="admin-toolbar">
           <input
@@ -587,6 +628,16 @@ export default function AdminPage() {
             <span className="banner-label">활성 링크 수</span>
             <strong>{liveCount}</strong>
             <span className="banner-subtext">활성 링크 기준</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">오늘 생성 수</span>
+            <strong>{todayCreated}</strong>
+            <span className="banner-subtext">오늘 기준</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">오늘 삭제 수</span>
+            <strong>{todayDeleted}</strong>
+            <span className="banner-subtext">오늘 기준</span>
           </div>
           <div className="banner-card">
             <span className="banner-label">자동 삭제됨</span>

@@ -39,6 +39,21 @@ create table if not exists public.short_link_rate_limits (
 create index if not exists short_link_rate_limits_window_start_idx
 on public.short_link_rate_limits (window_start);
 
+create table if not exists public.short_link_daily_stats (
+  day date primary key,
+  created_count integer not null default 0,
+  deleted_count integer not null default 0,
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.short_link_notifications (
+  alert_key text primary key,
+  kind text not null,
+  title text not null,
+  message text not null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 alter table public.short_links enable row level security;
 
 drop policy if exists "allow public read active short links" on public.short_links;
@@ -81,6 +96,8 @@ returns void
 language plpgsql
 security definer
 as $$
+declare
+  today date := timezone('utc', now())::date;
 begin
   update public.short_link_stats
   set total_deleted = total_deleted + greatest(coalesce(amount, 0), 0)
@@ -90,6 +107,13 @@ begin
     insert into public.short_link_stats (key, total_deleted)
     values ('global', greatest(coalesce(amount, 0), 0));
   end if;
+
+  insert into public.short_link_daily_stats (day, created_count, deleted_count, updated_at)
+  values (today, 0, greatest(coalesce(amount, 0), 0), timezone('utc', now()))
+  on conflict (day)
+  do update set
+    deleted_count = public.short_link_daily_stats.deleted_count + greatest(coalesce(amount, 0), 0),
+    updated_at = timezone('utc', now());
 end;
 $$;
 
@@ -98,6 +122,12 @@ returns void
 language plpgsql
 security definer
 as $$
+declare
+  today date := timezone('utc', now())::date;
+  created_delta integer := greatest(coalesce(amount, 0), 0);
+  today_created integer := 0;
+  alert_key text := format('daily-spike-%s', today::text);
+  alert_threshold constant integer := 50;
 begin
   update public.short_link_stats
   set total_created = total_created + greatest(coalesce(amount, 0), 0)
@@ -106,6 +136,25 @@ begin
   if not found then
     insert into public.short_link_stats (key, total_created, total_deleted)
     values ('global', greatest(coalesce(amount, 0), 0), 0);
+  end if;
+
+  insert into public.short_link_daily_stats (day, created_count, deleted_count, updated_at)
+  values (today, created_delta, 0, timezone('utc', now()))
+  on conflict (day)
+  do update set
+    created_count = public.short_link_daily_stats.created_count + created_delta,
+    updated_at = timezone('utc', now())
+  returning created_count into today_created;
+
+  if today_created >= alert_threshold then
+    insert into public.short_link_notifications (alert_key, kind, title, message)
+    values (
+      alert_key,
+      'daily_spike',
+      '오늘 생성 수가 많습니다',
+      format('오늘 생성된 단축 주소가 %s개를 넘었습니다. 남용 여부를 확인해 주세요.', today_created)
+    )
+    on conflict (alert_key) do nothing;
   end if;
 end;
 $$;
@@ -127,8 +176,28 @@ declare
   day_bucket_start timestamptz;
   minute_limit constant integer := 3;
   day_limit constant integer := 20;
+  global_day_limit constant integer := 100;
+  today_created integer := 0;
+  today date := timezone('utc', now())::date;
   now_utc timestamptz := timezone('utc', now());
 begin
+  select coalesce(created_count, 0)
+  into today_created
+  from public.short_link_daily_stats
+  where day = today;
+
+  if today_created >= global_day_limit then
+    allowed := false;
+    minute_count := 0;
+    day_count := today_created;
+    retry_after_seconds := greatest(
+      extract(epoch from ((today::timestamptz + interval '1 day') - now_utc))::integer,
+      1
+    );
+    return next;
+    return;
+  end if;
+
   minute_bucket_start := timezone(
     'utc',
     to_timestamp(floor(extract(epoch from now_utc) / 60) * 60)
@@ -167,3 +236,30 @@ begin
     select allowed, minute_count, day_count, retry_after_seconds;
 end;
 $$;
+
+create or replace function public.enforce_short_link_capacity()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  max_rows constant integer := 3000;
+  current_rows integer := 0;
+begin
+  select count(*) into current_rows
+  from public.short_links;
+
+  if current_rows >= max_rows then
+    raise exception '단축 주소 저장 공간이 가득 찼습니다. 잠시 후 다시 시도해 주세요.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists short_links_capacity_trigger on public.short_links;
+
+create trigger short_links_capacity_trigger
+before insert on public.short_links
+for each row
+execute function public.enforce_short_link_capacity();
