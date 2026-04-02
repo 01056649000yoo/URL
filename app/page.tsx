@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 
 type CreateResult = {
   shortUrl: string;
@@ -8,12 +8,14 @@ type CreateResult = {
   slug: string;
   destination: string;
   expiresAt?: string;
-  retentionDays?: number;
+  retentionPeriod?: string;
 };
 
 type ErrorResult = {
   error?: string;
 };
+
+type RetentionPeriod = "day" | "week" | "month";
 
 const BRAND_NAME = "쌤링크";
 const BRAND_DOMAIN = "쌤링크.kr";
@@ -40,7 +42,7 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [copyLabel, setCopyLabel] = useState("복사");
 
-  const resultUrl = useMemo(() => result?.displayShortUrl ?? result?.shortUrl ?? "", [result]);
+  const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,7 +56,7 @@ export default function HomePage() {
     const payload = {
       destination: String(formData.get("destination") ?? ""),
       adminToken: String(formData.get("adminToken") ?? ""),
-      retentionDays: Number(formData.get("retentionDays") ?? 7),
+      retentionPeriod: String(formData.get("retentionPeriod") ?? "week") as RetentionPeriod,
     };
 
     try {
@@ -132,16 +134,12 @@ export default function HomePage() {
 
           <div className="row">
             <label className="label">
-              <span>유지 기간(일)</span>
-              <input
-                className="field"
-                name="retentionDays"
-                type="number"
-                min={1}
-                max={365}
-                defaultValue={7}
-                required
-              />
+              <span>유지 기간</span>
+              <select className="field" name="retentionPeriod" defaultValue="week" required>
+                <option value="day">1일</option>
+                <option value="week">1주일</option>
+                <option value="month">1달</option>
+              </select>
             </label>
 
             <label className="label">
@@ -203,7 +201,7 @@ export default function HomePage() {
         <div className="help">
           <div className="help-chip">기본 코드 길이 4자</div>
           <p>
-            자동 생성 코드는 4자리로 만들어지고, 설정한 기간이 지나면 DB에서 자동 정리됩니다.
+            자동 생성 코드는 4자리로 만들어지고, 선택한 기간이 지나면 DB에서 자동 정리됩니다.
           </p>
         </div>
       </section>

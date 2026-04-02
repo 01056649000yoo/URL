@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
+import { domainToUnicode } from "node:url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateSlug, normalizeSlug } from "@/lib/slug";
 import { getBaseUrl } from "@/lib/site-url";
-import { domainToUnicode } from "node:url";
 
 type CreateLinkPayload = {
   destination?: string;
   slug?: string;
   adminToken?: string;
   createdBy?: string;
-  retentionDays?: number;
+  retentionPeriod?: "day" | "week" | "month";
 };
 
 function toDisplayUrl(shortUrl: string) {
@@ -22,6 +22,19 @@ function toDisplayUrl(shortUrl: string) {
   }
 }
 
+function retentionDaysFromPeriod(period: CreateLinkPayload["retentionPeriod"]) {
+  switch (period) {
+    case "day":
+      return 1;
+    case "week":
+      return 7;
+    case "month":
+      return 30;
+    default:
+      return null;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateLinkPayload;
@@ -29,7 +42,7 @@ export async function POST(request: Request) {
     const suppliedSlug = body.slug?.trim();
     const adminToken = body.adminToken?.trim();
     const createdBy = body.createdBy?.trim() || null;
-    const retentionDays = Number(body.retentionDays ?? 7);
+    const retentionDays = retentionDaysFromPeriod(body.retentionPeriod);
 
     if (!destination) {
       return NextResponse.json({ error: "원본 주소를 입력해 주세요." }, { status: 400 });
@@ -60,9 +73,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "관리자 토큰이 올바르지 않습니다." }, { status: 401 });
     }
 
-    if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 365) {
+    if (!retentionDays) {
       return NextResponse.json(
-        { error: "유지 기간은 1일 이상 365일 이하로 입력해 주세요." },
+        { error: "유지 기간은 1일, 1주일, 1달 중 하나를 선택해 주세요." },
         { status: 400 },
       );
     }
@@ -111,7 +124,7 @@ export async function POST(request: Request) {
       shortUrl,
       displayShortUrl: toDisplayUrl(shortUrl),
       expiresAt: data.expires_at,
-      retentionDays,
+      retentionPeriod: body.retentionPeriod,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
