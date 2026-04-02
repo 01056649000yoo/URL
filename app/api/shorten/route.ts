@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     const { data: rateLimitData, error: rateLimitError } = await admin.rpc(
       "consume_short_link_rate_limit",
       {
-        ip_hash: rateLimitKey,
+        p_ip_hash: rateLimitKey,
       },
     );
 

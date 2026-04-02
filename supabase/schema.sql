@@ -110,7 +110,7 @@ begin
 end;
 $$;
 
-create or replace function public.consume_short_link_rate_limit(ip_hash text)
+create or replace function public.consume_short_link_rate_limit(p_ip_hash text)
 returns table (
   allowed boolean,
   minute_count integer,
@@ -134,13 +134,13 @@ begin
   day_bucket_start := timezone('utc', date_trunc('day', now_utc));
 
   insert into public.short_link_rate_limits (ip_hash, bucket, window_start, request_count)
-  values (ip_hash, 'minute', minute_bucket_start, 1)
+  values (p_ip_hash, 'minute', minute_bucket_start, 1)
   on conflict (ip_hash, bucket, window_start)
   do update set request_count = public.short_link_rate_limits.request_count + 1
   returning request_count into minute_count;
 
   insert into public.short_link_rate_limits (ip_hash, bucket, window_start, request_count)
-  values (ip_hash, 'day', day_bucket_start, 1)
+  values (p_ip_hash, 'day', day_bucket_start, 1)
   on conflict (ip_hash, bucket, window_start)
   do update set request_count = public.short_link_rate_limits.request_count + 1
   returning request_count into day_count;
