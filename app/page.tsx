@@ -245,7 +245,7 @@ export default function HomePage() {
             </div>
           ) : (
             <p className="empty-result">
-              아직 생성된 링크가 없습니다. 주소를 입력하면 바로 짧은 주소로 바꿔드립니다.
+              아직 생성된 링크가 없습니다. 주소를 입력하면 짧은 주소와 QR코드로 만들어드립니다.
             </p>
           )}
         </section>
