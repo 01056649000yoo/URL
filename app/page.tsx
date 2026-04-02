@@ -261,7 +261,7 @@ export default function HomePage() {
             <span className="banner-subtext">전체 등록 수</span>
           </div>
           <div className="banner-card">
-            <span className="banner-label">현재 이용자 수</span>
+            <span className="banner-label">활성 링크 수</span>
             <strong>{stats.activeCount}</strong>
             <span className="banner-subtext">활성 링크 기준</span>
           </div>

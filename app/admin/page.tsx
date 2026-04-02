@@ -579,7 +579,7 @@ export default function AdminPage() {
             <strong>{links.length}</strong>
           </div>
           <div className="banner-card">
-            <span className="banner-label">현재 이용자 수</span>
+            <span className="banner-label">활성 링크 수</span>
             <strong>{liveCount}</strong>
             <span className="banner-subtext">활성 링크 기준</span>
           </div>
