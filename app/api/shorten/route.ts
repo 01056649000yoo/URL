@@ -7,7 +7,6 @@ import { getBaseUrl } from "@/lib/site-url";
 type CreateLinkPayload = {
   destination?: string;
   slug?: string;
-  adminToken?: string;
   createdBy?: string;
   retentionPeriod?: "day" | "week" | "month";
 };
@@ -40,7 +39,6 @@ export async function POST(request: Request) {
     const body = (await request.json()) as CreateLinkPayload;
     const destination = body.destination?.trim();
     const suppliedSlug = body.slug?.trim();
-    const adminToken = body.adminToken?.trim();
     const createdBy = body.createdBy?.trim() || null;
     const retentionDays = retentionDaysFromPeriod(body.retentionPeriod);
 
@@ -67,10 +65,6 @@ export async function POST(request: Request) {
         { error: "서버에 관리자 토큰이 설정되지 않았습니다." },
         { status: 500 },
       );
-    }
-
-    if (adminToken !== process.env.SHORTENER_ADMIN_TOKEN) {
-      return NextResponse.json({ error: "관리자 토큰이 올바르지 않습니다." }, { status: 401 });
     }
 
     if (!retentionDays) {

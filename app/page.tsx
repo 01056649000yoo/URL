@@ -21,14 +21,10 @@ const BRAND_NAME = "쌤링크";
 const BRAND_DOMAIN = "쌤링크.kr";
 
 function formatDateTime(value?: string) {
-  if (!value) {
-    return "";
-  }
+  if (!value) return "";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
+  if (Number.isNaN(date.getTime())) return "";
 
   return new Intl.DateTimeFormat("ko-KR", {
     dateStyle: "medium",
@@ -55,7 +51,6 @@ export default function HomePage() {
     const formData = new FormData(form);
     const payload = {
       destination: String(formData.get("destination") ?? ""),
-      adminToken: String(formData.get("adminToken") ?? ""),
       retentionPeriod: String(formData.get("retentionPeriod") ?? "week") as RetentionPeriod,
     };
 
@@ -92,9 +87,7 @@ export default function HomePage() {
   }
 
   async function handleCopy() {
-    if (!resultUrl) {
-      return;
-    }
+    if (!resultUrl) return;
 
     try {
       await navigator.clipboard.writeText(resultUrl);
@@ -140,17 +133,6 @@ export default function HomePage() {
                 <option value="week">1주일</option>
                 <option value="month">1달</option>
               </select>
-            </label>
-
-            <label className="label">
-              <span>관리자 토큰</span>
-              <input
-                className="field"
-                name="adminToken"
-                type="password"
-                placeholder="관리자 토큰을 입력해 주세요"
-                required
-              />
             </label>
           </div>
 
