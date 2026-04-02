@@ -12,6 +12,9 @@ type ErrorResult = {
   error?: string;
 };
 
+const BRAND_NAME = "쌤링크";
+const BRAND_DOMAIN = "쌤링크.kr";
+
 export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
@@ -86,10 +89,10 @@ export default function HomePage() {
         <div className="panel-decoration panel-decoration-right" aria-hidden="true" />
 
         <div className="intro">
-          <p className="eyebrow">끄적끄적아지트 단축 링크</p>
-          <h1>긴 주소를 귀엽고 빠르게 줄여보세요</h1>
+          <p className="eyebrow">{BRAND_NAME}</p>
+          <h1>원본 주소만 넣으면 4자리 코드 링크가 바로 만들어져요</h1>
           <p className="lead">
-            원본 주소와 관리자 토큰만 입력하면 바로 짧은 링크를 만들어 드립니다.
+            수업, 자료, 공지 링크를 빠르게 줄여서 공유할 수 있게 만든 가벼운 단축기입니다.
           </p>
         </div>
 
@@ -124,7 +127,7 @@ export default function HomePage() {
         <section className="result-card" aria-live="polite">
           <div className="result-head">
             <strong>생성된 단축 링크</strong>
-            <span className="result-tip">기본 형식: `go.끄적끄적아지트.site/slug`</span>
+            <span className="result-tip">기본 형식: `{BRAND_DOMAIN}/코드4자`</span>
           </div>
 
           {result ? (
@@ -132,7 +135,12 @@ export default function HomePage() {
               <a className="result-link" href={result.shortUrl} target="_blank" rel="noreferrer">
                 {result.shortUrl}
               </a>
-              <button className="copy-button" type="button" onClick={handleCopy} aria-label="단축 링크 복사">
+              <button
+                className="copy-button"
+                type="button"
+                onClick={handleCopy}
+                aria-label="단축 링크 복사"
+              >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M9 9a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z" />
                   <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
@@ -141,15 +149,19 @@ export default function HomePage() {
               </button>
             </div>
           ) : (
-            <p className="empty-result">아직 생성된 링크가 없습니다. 위에서 주소를 입력해 보세요.</p>
+            <p className="empty-result">
+              아직 생성된 링크가 없습니다. 주소를 입력하면 4자리 코드가 자동으로 붙습니다.
+            </p>
           )}
         </section>
 
         {error ? <p className="error">{error}</p> : null}
 
         <div className="help">
-          <div className="help-chip">발랄한 공유용</div>
-          <p>생성된 링크는 바로 열 수 있고, 복사 버튼으로 빠르게 전달할 수 있습니다.</p>
+          <div className="help-chip">기본 코드 길이 4자</div>
+          <p>
+            자동 생성 코드는 4자리로 만들어지고, 복사 버튼으로 바로 전달할 수 있습니다.
+          </p>
         </div>
       </section>
     </main>

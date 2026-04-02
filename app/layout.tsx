@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Private Short Links",
-  description: "A lightweight URL shortener for a small trusted group.",
+  title: "쌤링크",
+  description: "쌤링크.kr에서 쓰는 4자리 코드 기반 URL 단축기",
 };
 
 export default function RootLayout({
