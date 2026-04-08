@@ -21,6 +21,8 @@ create table if not exists public.short_link_stats (
   total_deleted integer not null default 0
 );
 
+alter table public.short_link_stats enable row level security;
+
 alter table public.short_link_stats
 add column if not exists total_created integer not null default 0;
 
@@ -39,12 +41,16 @@ create table if not exists public.short_link_rate_limits (
 create index if not exists short_link_rate_limits_window_start_idx
 on public.short_link_rate_limits (window_start);
 
+alter table public.short_link_rate_limits enable row level security;
+
 create table if not exists public.short_link_daily_stats (
   day date primary key,
   created_count integer not null default 0,
   deleted_count integer not null default 0,
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.short_link_daily_stats enable row level security;
 
 create table if not exists public.short_link_notifications (
   alert_key text primary key,
@@ -53,6 +59,8 @@ create table if not exists public.short_link_notifications (
   message text not null,
   created_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.short_link_notifications enable row level security;
 
 alter table public.short_links enable row level security;
 
