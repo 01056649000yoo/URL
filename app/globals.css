@@ -326,6 +326,36 @@ input {
   line-height: 1.5;
 }
 
+.project-banner {
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 127, 168, 0.14), rgba(79, 108, 251, 0.12));
+  border: 1px solid rgba(79, 108, 251, 0.16);
+  box-shadow: 0 14px 28px rgba(64, 88, 181, 0.1);
+  text-decoration: none;
+}
+
+.project-banner-kicker {
+  color: var(--brand);
+  font-size: 0.84rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.project-banner strong {
+  color: var(--text);
+  font-size: clamp(1rem, 2.2vw, 1.22rem);
+  line-height: 1.35;
+}
+
+.project-banner-link {
+  color: var(--muted);
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
 .result-stack {
   display: grid;
   gap: 8px;

@@ -278,6 +278,18 @@ export default function HomePage() {
         <p className="warning-note">
           오용과 남용을 막기 위해 과도한 생성, 자동화된 요청, 비정상적인 사용은 제한될 수 있습니다.
         </p>
+
+        <a
+          className="project-banner"
+          href="https://끄적끄적아지트.site"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="끄적끄적아지트 사이트로 이동"
+        >
+          <span className="project-banner-kicker">연결 사이트</span>
+          <strong>선생님이 만든 초등학생 글쓰기 통합 플랫폼</strong>
+          <span className="project-banner-link">끄적끄적아지트.site</span>
+        </a>
       </section>
 
       {isQrOpen && resultUrl ? (
