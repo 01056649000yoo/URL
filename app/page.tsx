@@ -290,6 +290,18 @@ export default function HomePage() {
           <strong>선생님이 만든 초등학생 글쓰기 통합 플랫폼</strong>
           <span className="project-banner-link">끄적끄적아지트.site</span>
         </a>
+
+        <a
+          className="project-banner"
+          href="https://survival.xn--vz0ba242ncqcba79xhwx.site/"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="문해력서바이벌 사이트로 이동"
+        >
+          <span className="project-banner-kicker">연결 사이트</span>
+          <strong>자리배치, 역할배치, 자리배치 기반 문해력 활동 웹앱 문해력 서바이벌</strong>
+          <span className="project-banner-link">survival.끄적끄적아지트.site</span>
+        </a>
       </section>
 
       {isQrOpen && resultUrl ? (
