@@ -46,6 +46,7 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [copyLabel, setCopyLabel] = useState("복사");
   const [isQrOpen, setIsQrOpen] = useState(false);
+  const [qrScale, setQrScale] = useState<1 | 1.5>(1);
   const [stats, setStats] = useState({
     totalCount: 0,
     createdCount: 0,
@@ -59,6 +60,12 @@ export default function HomePage() {
     if (!resultUrl) return "";
     return `/api/qr?size=360&margin=10&data=${encodeURIComponent(resultUrl)}`;
   }, [resultUrl]);
+
+  const qrModalImageUrl = useMemo(() => {
+    if (!resultUrl) return "";
+    const size = qrScale === 1.5 ? 540 : 360;
+    return `/api/qr?size=${size}&margin=10&data=${encodeURIComponent(resultUrl)}`;
+  }, [qrScale, resultUrl]);
 
   const qrDownloadUrl = useMemo(() => {
     if (!resultUrl) return "";
@@ -115,6 +122,7 @@ export default function HomePage() {
     setResult(null);
     setCopyLabel("복사");
     setIsQrOpen(false);
+    setQrScale(1);
 
     const form = event.currentTarget;
     const formData = new FormData(form);
@@ -320,7 +328,29 @@ export default function HomePage() {
               다운로드
             </a>
             <p className="qr-modal-title">단축링크 QR 코드</p>
-            <img className="qr-modal-image" src={qrImageUrl} alt="단축링크 QR 코드 크게 보기" />
+            <div className="qr-size-controls" aria-label="QR 코드 크기 선택">
+              <button
+                className={qrScale === 1 ? "qr-size-option is-active" : "qr-size-option"}
+                type="button"
+                onClick={() => setQrScale(1)}
+                aria-pressed={qrScale === 1}
+              >
+                기본
+              </button>
+              <button
+                className={qrScale === 1.5 ? "qr-size-option is-active" : "qr-size-option"}
+                type="button"
+                onClick={() => setQrScale(1.5)}
+                aria-pressed={qrScale === 1.5}
+              >
+                1.5배 크게
+              </button>
+            </div>
+            <img
+              className={qrScale === 1.5 ? "qr-modal-image is-large" : "qr-modal-image"}
+              src={qrModalImageUrl}
+              alt="단축링크 QR 코드 크게 보기"
+            />
             <p className="qr-modal-link">{resultUrl}</p>
           </div>
         </div>
