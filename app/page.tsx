@@ -27,6 +27,7 @@ type StatsResult = {
 type RetentionPeriod = "day" | "week" | "month";
 
 const BRAND_DOMAIN = "샘링크.kr";
+const PAGE_TITLE = "수업링크를 짧게 QR로";
 
 function formatDateTime(value?: string) {
   if (!value) return "";
@@ -55,6 +56,10 @@ export default function HomePage() {
   });
 
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
+
+  useEffect(() => {
+    document.title = PAGE_TITLE;
+  }, []);
 
   const qrImageUrl = useMemo(() => {
     if (!resultUrl) return "";
