@@ -21,6 +21,7 @@ type StatsResult = {
   createdCount?: number;
   activeCount?: number;
   deletedCount?: number;
+  commitHash?: string;
   error?: string;
 };
 
@@ -34,7 +35,22 @@ type LinkStatsResult = {
   error?: string;
 };
 
-type RetentionPeriod = "day" | "week" | "month";
+type MyLink = {
+  slug: string;
+  destination: string;
+  shortUrl: string;
+  displayShortUrl?: string;
+  expiresAt?: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type MyLinksResult = {
+  links?: MyLink[];
+  error?: string;
+};
+
+type RetentionPeriod = "day" | "week" | "month" | "quarter";
 
 const LAST_RESULT_KEY = "samlink-last-result";
 const MY_LINKS_KEY = "samlink-my-links";
@@ -104,11 +120,15 @@ export default function HomePage() {
     todayVisitors: 0,
   });
   const [savedLinkStats, setSavedLinkStats] = useState<Record<string, SavedLinkStats>>({});
+  const [myLinks, setMyLinks] = useState<MyLink[]>([]);
+  const [isLoadingMyLinks, setIsLoadingMyLinks] = useState(false);
+  const [isMyLinksExpanded, setIsMyLinksExpanded] = useState(false);
   const [stats, setStats] = useState({
     totalCount: 0,
     createdCount: 0,
     activeCount: 0,
     deletedCount: 0,
+    commitHash: "",
   });
 
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
@@ -117,6 +137,27 @@ export default function HomePage() {
   const selectedSavedUrl = selectedSavedLink
     ? selectedSavedLink.displayShortUrl ?? selectedSavedLink.shortUrl
     : "";
+  const visibleMyLinks = isMyLinksExpanded ? myLinks : myLinks.slice(0, 3);
+  const hiddenMyLinkCount = Math.max(myLinks.length - visibleMyLinks.length, 0);
+
+  async function loadMyLinks() {
+    setIsLoadingMyLinks(true);
+
+    try {
+      const response = await fetch("/api/my-links");
+      const data = (await response.json()) as MyLinksResult;
+
+      if (!response.ok) {
+        return;
+      }
+
+      setMyLinks(data.links ?? []);
+    } catch {
+      // 내 링크 목록은 보조 정보라서 실패해도 링크 생성 흐름은 막지 않습니다.
+    } finally {
+      setIsLoadingMyLinks(false);
+    }
+  }
 
   useEffect(() => {
     document.title = PAGE_TITLE;
@@ -137,6 +178,7 @@ export default function HomePage() {
     const links = readSavedLinks();
     setSavedLinks(links);
     writeSavedLinks(links);
+    void loadMyLinks();
   }, []);
 
   const qrImageUrl = useMemo(() => {
@@ -222,6 +264,7 @@ export default function HomePage() {
           createdCount: data.createdCount ?? 0,
           activeCount: data.activeCount ?? 0,
           deletedCount: data.deletedCount ?? 0,
+          commitHash: data.commitHash ?? "",
         });
       } catch {
         // 통계는 보조 정보이므로 조용히 무시합니다.
@@ -398,6 +441,7 @@ export default function HomePage() {
       setSavedLinks(merged);
       writeSavedLinks(merged);
       window.localStorage.setItem(LAST_RESULT_KEY, JSON.stringify(data));
+      await loadMyLinks();
       form.reset();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "예상치 못한 오류가 발생했습니다.";
@@ -492,6 +536,7 @@ export default function HomePage() {
               <option value="day">1일</option>
               <option value="week">1주일</option>
               <option value="month">1달</option>
+              <option value="quarter">3개월</option>
             </select>
           </label>
 
@@ -560,6 +605,54 @@ export default function HomePage() {
             <p className="empty-result">
               아직 생성된 링크가 없습니다. 주소를 입력하면 짧은 주소와 QR코드로 만들어드립니다.
             </p>
+          )}
+        </section>
+
+        <section className="my-links-card" aria-live="polite">
+          <div className="result-head">
+            <strong>내가 만든 링크</strong>
+            <span className="result-tip">이 브라우저에서 만든 최근 링크를 다시 보여줍니다.</span>
+          </div>
+
+          {isLoadingMyLinks ? (
+            <p className="empty-result">불러오는 중...</p>
+          ) : myLinks.length ? (
+            <div className="my-links-list">
+              {visibleMyLinks.map((link) => {
+                const shortUrl = link.displayShortUrl ?? link.shortUrl;
+                const isExpired = link.expiresAt ? new Date(link.expiresAt).getTime() <= Date.now() : false;
+                const statusLabel = !link.isActive ? "비활성" : isExpired ? "만료됨" : "사용 가능";
+
+                return (
+                  <article className="my-link-item" key={link.slug}>
+                    <div className="my-link-main">
+                      <a className="my-link-url" href={link.shortUrl} target="_blank" rel="noreferrer">
+                        {shortUrl}
+                      </a>
+                      <span className={link.isActive && !isExpired ? "my-link-status active" : "my-link-status"}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <p className="my-link-destination">{link.destination}</p>
+                    <p className="my-link-meta">
+                      생성 {formatDateTime(link.createdAt)}
+                      {link.expiresAt ? ` · 만료 ${formatDateTime(link.expiresAt)}` : ""}
+                    </p>
+                  </article>
+                );
+              })}
+              {myLinks.length > 3 ? (
+                <button
+                  className="my-links-toggle"
+                  type="button"
+                  onClick={() => setIsMyLinksExpanded((current) => !current)}
+                >
+                  {isMyLinksExpanded ? "접기" : `더 보기 ${hiddenMyLinkCount}개`}
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="empty-result">이 브라우저에서 만든 링크가 아직 없습니다.</p>
           )}
         </section>
 
@@ -693,7 +786,6 @@ export default function HomePage() {
           </div>
         </div>
       ) : null}
-
       {selectedSavedLink ? (
         <div className="qr-overlay" role="presentation" onClick={() => setSelectedSavedSlug(null)}>
           <div
@@ -817,6 +909,30 @@ export default function HomePage() {
             />
             <p className="qr-modal-link">{selectedSavedUrl}</p>
           </div>
+        </div>
+      ) : null}
+
+      {stats.commitHash ? (
+        <div style={{
+          position: "fixed",
+          bottom: "12px",
+          right: "12px",
+          fontSize: "11px",
+          color: "rgba(100, 116, 139, 0.8)",
+          backgroundColor: "rgba(241, 245, 249, 0.9)",
+          border: "1px solid rgba(226, 232, 240, 0.8)",
+          padding: "3px 8px",
+          borderRadius: "6px",
+          pointerEvents: "none",
+          zIndex: 9999,
+          fontFamily: "var(--font-mono, monospace)",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+        }}>
+          <span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#10b981" }} />
+          commit: {stats.commitHash}
         </div>
       ) : null}
     </main>

@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { domainToUnicode } from "node:url";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getOrCreateDeviceId, setDeviceCookie } from "@/lib/device-cookie";
 import { generateSlug, normalizeSlug } from "@/lib/slug";
 import { getRateLimitKey } from "@/lib/rate-limit";
 import { getBaseUrl } from "@/lib/site-url";
@@ -9,7 +10,7 @@ type CreateLinkPayload = {
   destination?: string;
   slug?: string;
   createdBy?: string;
-  retentionPeriod?: "day" | "week" | "month";
+  retentionPeriod?: "day" | "week" | "month" | "quarter";
 };
 
 function toDisplayUrl(shortUrl: string) {
@@ -30,17 +31,20 @@ function retentionDaysFromPeriod(period: CreateLinkPayload["retentionPeriod"]) {
       return 7;
     case "month":
       return 30;
+    case "quarter":
+      return 90;
     default:
       return null;
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CreateLinkPayload;
     const destination = body.destination?.trim();
     const suppliedSlug = body.slug?.trim();
-    const createdBy = body.createdBy?.trim() || null;
+    const { deviceId } = getOrCreateDeviceId(request);
+    const createdBy = deviceId;
     const retentionDays = retentionDaysFromPeriod(body.retentionPeriod);
 
     if (!destination) {
@@ -150,7 +154,7 @@ export async function POST(request: Request) {
       // 누적 통계는 보조 정보이므로 링크 생성 자체는 막지 않습니다.
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       slug: data.slug,
       destination: data.destination,
       shortUrl,
@@ -158,6 +162,8 @@ export async function POST(request: Request) {
       expiresAt: data.expires_at,
       retentionPeriod: body.retentionPeriod,
     });
+    setDeviceCookie(response, deviceId);
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
     return NextResponse.json({ error: message }, { status: 500 });
