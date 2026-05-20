@@ -105,9 +105,46 @@ docker compose --env-file .env.local logs -f app
 docker compose --env-file .env.local logs -f cleanup
 ```
 
-## 배포 업데이트
+## GitHub Actions 자동배포
 
-현재 운영은 `app`과 `cleanup` 두 컨테이너만 사용합니다. 새 코드를 반영할 때는 서버에서 수동으로 최신 코드를 받고 다시 빌드합니다.
+현재 권장 운영 방식은 GitHub `main` 브랜치에 푸시하면 GitHub Actions가 맥미니에 SSH로 접속해서 최신 코드를 받고 Docker를 다시 빌드하는 구조입니다.
+
+워크플로 파일은 [.github/workflows/deploy.yml](./.github/workflows/deploy.yml) 입니다.
+
+1. 서버에 배포용 SSH 키를 준비합니다.
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy"
+```
+
+2. 공개키를 서버 사용자 `~/.ssh/authorized_keys`에 추가합니다.
+
+3. GitHub 저장소 `Settings > Secrets and variables > Actions`에 아래 시크릿을 추가합니다.
+
+- `SERVER_HOST`: 서버 접속 주소 또는 도메인
+- `SERVER_PORT`: SSH 포트. 보통 `22`
+- `SERVER_USER`: 서버 로그인 사용자
+- `SERVER_SSH_KEY`: GitHub Actions가 사용할 개인키 전체 내용
+- `SSH_KNOWN_HOSTS`: `ssh-keyscan -p 포트 호스트` 결과
+
+예시:
+
+```bash
+ssh-keyscan -p 22 your-server.example.com
+```
+
+4. 이후 `main`에 푸시하면 아래 명령이 서버에서 자동 실행됩니다.
+
+```bash
+cd /Users/seunghyeonmaegmini/URL
+git pull --ff-only origin main
+docker compose --env-file .env.local up -d --build
+docker compose --env-file .env.local ps
+```
+
+## 수동 배포
+
+문제가 있을 때는 서버에서 직접 아래 순서로 수동 배포할 수 있습니다.
 
 1. 최신 코드를 가져옵니다.
 
