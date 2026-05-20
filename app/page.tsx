@@ -24,10 +24,36 @@ type StatsResult = {
   error?: string;
 };
 
+type LinkStatsResult = {
+  slug?: string;
+  clickCount?: number;
+  recentVisitors?: number;
+  todayVisitors?: number;
+  isActive?: boolean;
+  expiresAt?: string | null;
+  error?: string;
+};
+
 type RetentionPeriod = "day" | "week" | "month";
+
+const LAST_RESULT_KEY = "samlink-last-result";
+const MY_LINKS_KEY = "samlink-my-links";
+const MAX_SAVED_LINKS = 30;
 
 const BRAND_DOMAIN = "샘링크.kr";
 const PAGE_TITLE = "수업링크를 짧게 QR로";
+
+type SavedLink = CreateResult & {
+  savedAt: string;
+};
+
+type SavedLinkStats = {
+  clickCount: number;
+  recentVisitors: number;
+  todayVisitors: number;
+  isActive?: boolean;
+  expiresAt?: string | null;
+};
 
 function formatDateTime(value?: string) {
   if (!value) return "";
@@ -41,13 +67,43 @@ function formatDateTime(value?: string) {
   }).format(date);
 }
 
+function isExpired(value?: string | null) {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && time <= Date.now();
+}
+
+function readSavedLinks() {
+  try {
+    const raw = window.localStorage.getItem(MY_LINKS_KEY);
+    if (!raw) return [] as SavedLink[];
+    const parsed = JSON.parse(raw) as SavedLink[];
+    return parsed.filter((link) => link.slug && link.shortUrl && !isExpired(link.expiresAt));
+  } catch {
+    return [] as SavedLink[];
+  }
+}
+
+function writeSavedLinks(links: SavedLink[]) {
+  window.localStorage.setItem(MY_LINKS_KEY, JSON.stringify(links.slice(0, MAX_SAVED_LINKS)));
+}
+
 export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
   const [error, setError] = useState("");
   const [copyLabel, setCopyLabel] = useState("복사");
   const [isQrOpen, setIsQrOpen] = useState(false);
+  const [isSavedQrOpen, setIsSavedQrOpen] = useState(false);
   const [qrScale, setQrScale] = useState<1 | 1.5>(1);
+  const [savedLinks, setSavedLinks] = useState<SavedLink[]>([]);
+  const [selectedSavedSlug, setSelectedSavedSlug] = useState<string | null>(null);
+  const [linkStats, setLinkStats] = useState({
+    clickCount: 0,
+    recentVisitors: 0,
+    todayVisitors: 0,
+  });
+  const [savedLinkStats, setSavedLinkStats] = useState<Record<string, SavedLinkStats>>({});
   const [stats, setStats] = useState({
     totalCount: 0,
     createdCount: 0,
@@ -56,9 +112,31 @@ export default function HomePage() {
   });
 
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
+  const selectedSavedLink = savedLinks.find((link) => link.slug === selectedSavedSlug) ?? null;
+  const selectedSavedStats = selectedSavedLink ? savedLinkStats[selectedSavedLink.slug] : null;
+  const selectedSavedUrl = selectedSavedLink
+    ? selectedSavedLink.displayShortUrl ?? selectedSavedLink.shortUrl
+    : "";
 
   useEffect(() => {
     document.title = PAGE_TITLE;
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(LAST_RESULT_KEY);
+      if (!saved) return;
+
+      const parsed = JSON.parse(saved) as CreateResult;
+      if (!parsed?.slug || !parsed?.shortUrl) return;
+      setResult(parsed);
+    } catch {
+      // 저장된 최근 링크가 없어도 정상입니다.
+    }
+
+    const links = readSavedLinks();
+    setSavedLinks(links);
+    writeSavedLinks(links);
   }, []);
 
   const qrImageUrl = useMemo(() => {
@@ -77,6 +155,17 @@ export default function HomePage() {
     return `/api/qr?size=1200&margin=20&data=${encodeURIComponent(resultUrl)}`;
   }, [resultUrl]);
 
+  const selectedSavedQrImageUrl = useMemo(() => {
+    if (!selectedSavedUrl) return "";
+    const size = qrScale === 1.5 ? 540 : 360;
+    return `/api/qr?size=${size}&margin=10&data=${encodeURIComponent(selectedSavedUrl)}`;
+  }, [qrScale, selectedSavedUrl]);
+
+  const selectedSavedQrDownloadUrl = useMemo(() => {
+    if (!selectedSavedUrl) return "";
+    return `/api/qr?size=1200&margin=20&data=${encodeURIComponent(selectedSavedUrl)}`;
+  }, [selectedSavedUrl]);
+
   useEffect(() => {
     if (!isQrOpen) return;
 
@@ -89,6 +178,32 @@ export default function HomePage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isQrOpen]);
+
+  useEffect(() => {
+    if (!isSavedQrOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsSavedQrOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSavedQrOpen]);
+
+  useEffect(() => {
+    if (!selectedSavedSlug) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSelectedSavedSlug(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedSavedSlug]);
 
   useEffect(() => {
     let mounted = true;
@@ -120,6 +235,114 @@ export default function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    const currentSlug = result?.slug;
+    if (!currentSlug) {
+      setLinkStats({
+        clickCount: 0,
+        recentVisitors: 0,
+        todayVisitors: 0,
+      });
+      return;
+    }
+
+    let mounted = true;
+
+    async function loadLinkStats() {
+      try {
+        const response = await fetch(`/api/link-stats/${currentSlug}`);
+        const data = (await response.json()) as LinkStatsResult;
+
+        if (!mounted || !response.ok) {
+          return;
+        }
+
+        setLinkStats({
+          clickCount: data.clickCount ?? 0,
+          recentVisitors: data.recentVisitors ?? 0,
+          todayVisitors: data.todayVisitors ?? 0,
+        });
+      } catch {
+        // 링크별 통계는 보조 정보이므로 조용히 무시합니다.
+      }
+    }
+
+    void loadLinkStats();
+    const timer = window.setInterval(() => {
+      void loadLinkStats();
+    }, 30000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [result?.slug]);
+
+  useEffect(() => {
+    if (!savedLinks.length) {
+      setSavedLinkStats({});
+      return;
+    }
+
+    let mounted = true;
+
+    async function loadSavedLinkStats() {
+      const entries = await Promise.all(
+        savedLinks.map(async (link) => {
+          try {
+            const response = await fetch(`/api/link-stats/${link.slug}`);
+            const data = (await response.json()) as LinkStatsResult;
+            if (!response.ok) return null;
+
+            return [
+              link.slug,
+              {
+                clickCount: data.clickCount ?? 0,
+                recentVisitors: data.recentVisitors ?? 0,
+                todayVisitors: data.todayVisitors ?? 0,
+                isActive: data.isActive,
+                expiresAt: data.expiresAt,
+              },
+            ] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      if (!mounted) return;
+
+      const nextStats: Record<string, SavedLinkStats> = {};
+      for (const entry of entries) {
+        if (!entry) continue;
+        nextStats[entry[0]] = entry[1];
+      }
+      setSavedLinkStats(nextStats);
+
+      const filteredLinks = savedLinks.filter((link) => {
+        const statsForLink = nextStats[link.slug];
+        if (statsForLink && statsForLink.isActive === false) return false;
+        if (isExpired(statsForLink?.expiresAt ?? link.expiresAt)) return false;
+        return true;
+      });
+
+      if (filteredLinks.length !== savedLinks.length) {
+        setSavedLinks(filteredLinks);
+        writeSavedLinks(filteredLinks);
+      }
+    }
+
+    void loadSavedLinkStats();
+    const timer = window.setInterval(() => {
+      void loadSavedLinkStats();
+    }, 30000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [savedLinks]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
@@ -127,6 +350,7 @@ export default function HomePage() {
     setResult(null);
     setCopyLabel("복사");
     setIsQrOpen(false);
+    setIsSavedQrOpen(false);
     setQrScale(1);
 
     const form = event.currentTarget;
@@ -158,6 +382,22 @@ export default function HomePage() {
       }
 
       setResult(data);
+      setLinkStats({
+        clickCount: 0,
+        recentVisitors: 0,
+        todayVisitors: 0,
+      });
+      const nextSaved: SavedLink = {
+        ...data,
+        savedAt: new Date().toISOString(),
+      };
+      const merged = [
+        nextSaved,
+        ...readSavedLinks().filter((link) => link.slug !== nextSaved.slug && !isExpired(link.expiresAt)),
+      ].slice(0, MAX_SAVED_LINKS);
+      setSavedLinks(merged);
+      writeSavedLinks(merged);
+      window.localStorage.setItem(LAST_RESULT_KEY, JSON.stringify(data));
       form.reset();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "예상치 못한 오류가 발생했습니다.";
@@ -180,22 +420,59 @@ export default function HomePage() {
     }
   }
 
+  async function copySavedLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyLabel("복사됨");
+      window.setTimeout(() => setCopyLabel("복사"), 1600);
+    } catch {
+      setCopyLabel("실패");
+      window.setTimeout(() => setCopyLabel("복사"), 1600);
+    }
+  }
+
+  function removeSavedLink(slug: string) {
+    const confirmed = window.confirm("이 링크를 내 목록에서 삭제할까요?");
+    if (!confirmed) return;
+
+    const filtered = savedLinks.filter((link) => link.slug !== slug);
+    setSavedLinks(filtered);
+    writeSavedLinks(filtered);
+    if (selectedSavedSlug === slug) {
+      setSelectedSavedSlug(null);
+    }
+    if (result?.slug === slug) {
+      setResult(null);
+      window.localStorage.removeItem(LAST_RESULT_KEY);
+    }
+  }
+
   return (
     <main className="shell shell-home">
       <section className="panel panel-home">
         <div className="panel-decoration panel-decoration-left" aria-hidden="true" />
         <div className="panel-decoration panel-decoration-right" aria-hidden="true" />
 
-        <header className="brand-bar">
-          <Image
-            className="brand-logo"
-            src="/samlink-logo.svg"
-            alt="샘링크 로고"
-            width={320}
-            height={92}
-            priority
-          />
-        </header>
+        <section className="hero-overview">
+          <header className="brand-bar">
+            <Image
+              className="brand-logo"
+              src="/samlink-logo.svg"
+              alt="샘링크 로고"
+              width={320}
+              height={92}
+              priority
+            />
+          </header>
+
+          <aside className="feature-brief" aria-label="샘링크 기능 안내">
+            <div className="feature-brief-list">
+              <span className="feature-brief-pill">단축 링크·QR 즉시 생성</span>
+              <span className="feature-brief-pill">브라우저 기반 링크 보관</span>
+              <span className="feature-brief-pill">링크별 방문 통계 확인</span>
+            </div>
+          </aside>
+        </section>
 
         <form className="stack" onSubmit={handleSubmit}>
           <label className="label">
@@ -260,6 +537,24 @@ export default function HomePage() {
               {result.expiresAt ? (
                 <p className="result-meta">만료 예정: {formatDateTime(result.expiresAt)}</p>
               ) : null}
+
+              <div className="public-footer-banner" aria-label="방금 만든 링크 통계">
+                <div className="banner-card">
+                  <span className="banner-label">총 클릭 수</span>
+                  <strong>{linkStats.clickCount}</strong>
+                  <span className="banner-subtext">누적 기준</span>
+                </div>
+                <div className="banner-card">
+                  <span className="banner-label">최근 5분 접속</span>
+                  <strong>{linkStats.recentVisitors}</strong>
+                  <span className="banner-subtext">유니크 방문자 기준</span>
+                </div>
+                <div className="banner-card">
+                  <span className="banner-label">오늘 방문자 수</span>
+                  <strong>{linkStats.todayVisitors}</strong>
+                  <span className="banner-subtext">유니크 방문자 기준</span>
+                </div>
+              </div>
             </div>
           ) : (
             <p className="empty-result">
@@ -269,6 +564,44 @@ export default function HomePage() {
         </section>
 
         {error ? <p className="error">{error}</p> : null}
+
+        <section className="result-card" aria-label="내가 만든 링크">
+          <div className="result-head">
+            <strong>내가 만든 링크</strong>
+            <span className="result-tip">이 브라우저에 저장된 최근 링크</span>
+          </div>
+
+          {savedLinks.length ? (
+            <div className="saved-links-list">
+              {savedLinks.map((link) => {
+                const linkUrl = link.displayShortUrl ?? link.shortUrl;
+                const statsForLink = savedLinkStats[link.slug];
+
+                return (
+                  <button
+                    className="saved-link-item"
+                    type="button"
+                    key={link.slug}
+                    onClick={() => setSelectedSavedSlug(link.slug)}
+                  >
+                    <div className="saved-link-item-main">
+                      <strong>{linkUrl}</strong>
+                      <span>{link.destination}</span>
+                    </div>
+                    <div className="saved-link-item-meta">
+                      <span>클릭 {statsForLink?.clickCount ?? 0}</span>
+                      <span>최근 5분 {statsForLink?.recentVisitors ?? 0}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="empty-result">
+              아직 이 브라우저에 저장된 링크가 없습니다. 링크를 만들면 자동으로 여기에 쌓입니다.
+            </p>
+          )}
+        </section>
 
         <div className="public-footer-banner" aria-label="샘링크 통계">
           <div className="banner-card">
@@ -357,6 +690,132 @@ export default function HomePage() {
               alt="단축링크 QR 코드 크게 보기"
             />
             <p className="qr-modal-link">{resultUrl}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedSavedLink ? (
+        <div className="qr-overlay" role="presentation" onClick={() => setSelectedSavedSlug(null)}>
+          <div
+            className="qr-modal saved-link-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="저장된 링크 정보"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button className="qr-close" type="button" onClick={() => setSelectedSavedSlug(null)} aria-label="링크 정보 닫기">
+              닫기
+            </button>
+            <p className="qr-modal-title">저장된 링크 정보</p>
+            <a
+              className="result-link saved-link-modal-url"
+              href={selectedSavedLink.shortUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {selectedSavedUrl}
+            </a>
+            <p className="result-meta">원본 주소: {selectedSavedLink.destination}</p>
+            <p className="result-meta">
+              만료 예정: {formatDateTime(selectedSavedStats?.expiresAt ?? selectedSavedLink.expiresAt)}
+            </p>
+            <p className="result-meta">저장한 시각: {formatDateTime(selectedSavedLink.savedAt)}</p>
+            <div className="saved-link-qr-header">
+              <strong>QR 코드</strong>
+              <div className="saved-link-actions">
+                <button className="mini-button" type="button" onClick={() => setIsSavedQrOpen(true)}>
+                  QR 코드 보기
+                </button>
+                <a
+                  className="mini-button"
+                  href={selectedSavedQrDownloadUrl}
+                  download={`samlink-qr-${selectedSavedLink.slug}.png`}
+                >
+                  다운로드
+                </a>
+              </div>
+            </div>
+            <div className="public-footer-banner" aria-label={`${selectedSavedLink.slug} 링크 통계`}>
+              <div className="banner-card">
+                <span className="banner-label">총 클릭 수</span>
+                <strong>{selectedSavedStats?.clickCount ?? 0}</strong>
+                <span className="banner-subtext">누적 기준</span>
+              </div>
+              <div className="banner-card">
+                <span className="banner-label">최근 5분 접속</span>
+                <strong>{selectedSavedStats?.recentVisitors ?? 0}</strong>
+                <span className="banner-subtext">같은 브라우저는 1명</span>
+              </div>
+              <div className="banner-card">
+                <span className="banner-label">오늘 방문자 수</span>
+                <strong>{selectedSavedStats?.todayVisitors ?? 0}</strong>
+                <span className="banner-subtext">쿠키 기준 방문자</span>
+              </div>
+            </div>
+            <div className="saved-link-actions">
+              <button
+                className="mini-button"
+                type="button"
+                onClick={() => copySavedLink(selectedSavedUrl)}
+              >
+                복사
+              </button>
+              <button
+                className="mini-button danger"
+                type="button"
+                onClick={() => removeSavedLink(selectedSavedLink.slug)}
+              >
+                삭제하기
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedSavedLink && isSavedQrOpen ? (
+        <div className="qr-overlay" role="presentation" onClick={() => setIsSavedQrOpen(false)}>
+          <div
+            className="qr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="저장된 링크 QR 코드 크게 보기"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button className="qr-close" type="button" onClick={() => setIsSavedQrOpen(false)} aria-label="QR 코드 닫기">
+              닫기
+            </button>
+            <a
+              className="qr-download"
+              href={selectedSavedQrDownloadUrl}
+              download={`samlink-qr-${selectedSavedLink.slug}.png`}
+            >
+              다운로드
+            </a>
+            <p className="qr-modal-title">저장된 링크 QR 코드</p>
+            <div className="qr-size-controls" aria-label="QR 코드 크기 선택">
+              <button
+                className={qrScale === 1 ? "qr-size-option is-active" : "qr-size-option"}
+                type="button"
+                onClick={() => setQrScale(1)}
+                aria-pressed={qrScale === 1}
+              >
+                기본
+              </button>
+              <button
+                className={qrScale === 1.5 ? "qr-size-option is-active" : "qr-size-option"}
+                type="button"
+                onClick={() => setQrScale(1.5)}
+                aria-pressed={qrScale === 1.5}
+              >
+                1.5배 크게
+              </button>
+            </div>
+            <img
+              className={qrScale === 1.5 ? "qr-modal-image is-large" : "qr-modal-image"}
+              src={selectedSavedQrImageUrl}
+              alt="저장된 링크 QR 코드 크게 보기"
+            />
+            <p className="qr-modal-link">{selectedSavedUrl}</p>
           </div>
         </div>
       ) : null}

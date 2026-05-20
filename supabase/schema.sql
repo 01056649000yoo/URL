@@ -52,6 +52,22 @@ create table if not exists public.short_link_daily_stats (
 
 alter table public.short_link_daily_stats enable row level security;
 
+create table if not exists public.short_link_visits (
+  id bigint generated always as identity primary key,
+  link_id bigint not null references public.short_links (id) on delete cascade,
+  visitor_hash text not null,
+  referrer text,
+  visited_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists short_link_visits_link_id_visited_at_idx
+on public.short_link_visits (link_id, visited_at desc);
+
+create index if not exists short_link_visits_visited_at_idx
+on public.short_link_visits (visited_at desc);
+
+alter table public.short_link_visits enable row level security;
+
 create table if not exists public.short_link_notifications (
   alert_key text primary key,
   kind text not null,
@@ -80,6 +96,19 @@ as $$
   update public.short_links
   set click_count = click_count + 1
   where id = link_id;
+$$;
+
+create or replace function public.record_short_link_visit(
+  p_link_id bigint,
+  p_visitor_hash text,
+  p_referrer text default null
+)
+returns void
+language sql
+security definer
+as $$
+  insert into public.short_link_visits (link_id, visitor_hash, referrer)
+  values (p_link_id, p_visitor_hash, nullif(trim(p_referrer), ''));
 $$;
 
 create or replace function public.delete_expired_short_links()

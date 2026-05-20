@@ -13,6 +13,7 @@ function pickClientIp(request: Request) {
 export function getRateLimitKey(request: Request) {
   const salt = process.env.RATE_LIMIT_SALT?.trim() || "samlink-rate-limit-v1";
   const ip = pickClientIp(request);
+  const userAgent = request.headers.get("user-agent")?.trim() || "unknown";
 
-  return createHash("sha256").update(`${ip}|${salt}`).digest("hex");
+  return createHash("sha256").update(`${ip}|${userAgent}|${salt}`).digest("hex");
 }

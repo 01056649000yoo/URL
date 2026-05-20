@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  getOrCreateVisitorIdentity,
+  getRequestReferrer,
+  getVisitorCookieMaxAge,
+  getVisitorCookieName,
+} from "@/lib/visitor";
 
 type RouteContext = {
   params: Promise<{
@@ -7,9 +13,10 @@ type RouteContext = {
   }>;
 };
 
-export async function GET(_: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const { slug } = await context.params;
   const admin = createAdminClient();
+  const visitor = getOrCreateVisitorIdentity(request);
 
   const { data, error } = await admin
     .from("short_links")
@@ -29,9 +36,30 @@ export async function GET(_: Request, context: RouteContext) {
     return NextResponse.json({ error: "링크가 만료되었습니다." }, { status: 404 });
   }
 
-  await admin.rpc("increment_click_count", {
-    link_id: data.id,
-  });
+  await Promise.allSettled([
+    admin.rpc("increment_click_count", {
+      link_id: data.id,
+    }),
+    admin.rpc("record_short_link_visit", {
+      p_link_id: data.id,
+      p_visitor_hash: visitor.visitorHash,
+      p_referrer: getRequestReferrer(request),
+    }),
+  ]);
 
-  return NextResponse.redirect(data.destination, { status: 307 });
+  const response = NextResponse.redirect(data.destination, { status: 307 });
+
+  if (visitor.needsCookie) {
+    response.cookies.set({
+      name: getVisitorCookieName(),
+      value: visitor.visitorId,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      maxAge: getVisitorCookieMaxAge(),
+    });
+  }
+
+  return response;
 }
