@@ -24,6 +24,21 @@ type StatsResult = {
   error?: string;
 };
 
+type MyLink = {
+  slug: string;
+  destination: string;
+  shortUrl: string;
+  displayShortUrl?: string;
+  expiresAt?: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type MyLinksResult = {
+  links?: MyLink[];
+  error?: string;
+};
+
 type RetentionPeriod = "day" | "week" | "month";
 
 const BRAND_DOMAIN = "샘링크.kr";
@@ -48,6 +63,9 @@ export default function HomePage() {
   const [copyLabel, setCopyLabel] = useState("복사");
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [qrScale, setQrScale] = useState<1 | 1.5>(1);
+  const [myLinks, setMyLinks] = useState<MyLink[]>([]);
+  const [isLoadingMyLinks, setIsLoadingMyLinks] = useState(false);
+  const [isMyLinksExpanded, setIsMyLinksExpanded] = useState(false);
   const [stats, setStats] = useState({
     totalCount: 0,
     createdCount: 0,
@@ -56,9 +74,34 @@ export default function HomePage() {
   });
 
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
+  const visibleMyLinks = isMyLinksExpanded ? myLinks : myLinks.slice(0, 3);
+  const hiddenMyLinkCount = Math.max(myLinks.length - visibleMyLinks.length, 0);
+
+  async function loadMyLinks() {
+    setIsLoadingMyLinks(true);
+
+    try {
+      const response = await fetch("/api/my-links");
+      const data = (await response.json()) as MyLinksResult;
+
+      if (!response.ok) {
+        return;
+      }
+
+      setMyLinks(data.links ?? []);
+    } catch {
+      // 내 링크 목록은 보조 정보라서 실패해도 링크 생성 흐름은 막지 않습니다.
+    } finally {
+      setIsLoadingMyLinks(false);
+    }
+  }
 
   useEffect(() => {
     document.title = PAGE_TITLE;
+  }, []);
+
+  useEffect(() => {
+    void loadMyLinks();
   }, []);
 
   const qrImageUrl = useMemo(() => {
@@ -158,6 +201,7 @@ export default function HomePage() {
       }
 
       setResult(data);
+      await loadMyLinks();
       form.reset();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "예상치 못한 오류가 발생했습니다.";
@@ -265,6 +309,54 @@ export default function HomePage() {
             <p className="empty-result">
               아직 생성된 링크가 없습니다. 주소를 입력하면 짧은 주소와 QR코드로 만들어드립니다.
             </p>
+          )}
+        </section>
+
+        <section className="my-links-card" aria-live="polite">
+          <div className="result-head">
+            <strong>내가 만든 링크</strong>
+            <span className="result-tip">이 브라우저에서 만든 최근 링크를 다시 보여줍니다.</span>
+          </div>
+
+          {isLoadingMyLinks ? (
+            <p className="empty-result">불러오는 중...</p>
+          ) : myLinks.length ? (
+            <div className="my-links-list">
+              {visibleMyLinks.map((link) => {
+                const shortUrl = link.displayShortUrl ?? link.shortUrl;
+                const isExpired = link.expiresAt ? new Date(link.expiresAt).getTime() <= Date.now() : false;
+                const statusLabel = !link.isActive ? "비활성" : isExpired ? "만료됨" : "사용 가능";
+
+                return (
+                  <article className="my-link-item" key={link.slug}>
+                    <div className="my-link-main">
+                      <a className="my-link-url" href={link.shortUrl} target="_blank" rel="noreferrer">
+                        {shortUrl}
+                      </a>
+                      <span className={link.isActive && !isExpired ? "my-link-status active" : "my-link-status"}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <p className="my-link-destination">{link.destination}</p>
+                    <p className="my-link-meta">
+                      생성 {formatDateTime(link.createdAt)}
+                      {link.expiresAt ? ` · 만료 ${formatDateTime(link.expiresAt)}` : ""}
+                    </p>
+                  </article>
+                );
+              })}
+              {myLinks.length > 3 ? (
+                <button
+                  className="my-links-toggle"
+                  type="button"
+                  onClick={() => setIsMyLinksExpanded((current) => !current)}
+                >
+                  {isMyLinksExpanded ? "접기" : `더 보기 ${hiddenMyLinkCount}개`}
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="empty-result">이 브라우저에서 만든 링크가 아직 없습니다.</p>
           )}
         </section>
 
