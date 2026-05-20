@@ -535,7 +535,7 @@ export default function HomePage() {
             <select className="field" name="retentionPeriod" defaultValue="week" required>
               <option value="day">1일</option>
               <option value="week">1주일</option>
-              <option value="month">1달</option>
+              <option value="month">1개월</option>
               <option value="quarter">3개월</option>
             </select>
           </label>
@@ -546,9 +546,8 @@ export default function HomePage() {
         </form>
 
         <section className="result-card" aria-live="polite">
-          <div className="result-head">
-            <strong>생성된 단축 링크</strong>
-            <span className="result-tip">기본 형식: {BRAND_DOMAIN}/코드4자</span>
+          <div className="result-head result-head-primary">
+            <span className="result-tip">생성 형식: {BRAND_DOMAIN}/코드4자</span>
           </div>
 
           {result ? (
@@ -601,11 +600,7 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-          ) : (
-            <p className="empty-result">
-              아직 생성된 링크가 없습니다. 주소를 입력하면 짧은 주소와 QR코드로 만들어드립니다.
-            </p>
-          )}
+          ) : null}
         </section>
 
         <section className="my-links-card" aria-live="polite">
@@ -742,13 +737,11 @@ export default function HomePage() {
           <span className="project-banner-link">survival.끄적끄적아지트.site</span>
         </a>
 
-        <footer className="site-footer" aria-label="사업자 정보">
-          <p>상호명: 끄적끄적 아지트</p>
-          <p>운영책임자: 유승현</p>
-          <p>문의: <a href="mailto:yshgg@naver.com">yshgg@naver.com</a></p>
-          <p>© 2026 끄적끄적 아지트. All rights reserved.</p>
-        </footer>
       </section>
+
+      <footer className="site-footer" aria-label="사업자 정보">
+        상호명: 끄적끄적 아지트 | 운영책임자: 유승현 | 문의: <a href="mailto:yshgg@naver.com">yshgg@naver.com</a> | © 2026 끄적끄적 아지트. All rights reserved.
+      </footer>
 
       {isQrOpen && resultUrl ? (
         <div className="qr-overlay" role="presentation" onClick={() => setIsQrOpen(false)}>

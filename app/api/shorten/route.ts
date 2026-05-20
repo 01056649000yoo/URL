@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     if (!retentionDays) {
       return NextResponse.json(
-        { error: "유지 기간은 1일, 1주일, 1달 중 하나를 선택해 주세요." },
+        { error: "유지 기간은 1일, 1주일, 1개월, 3달 중 하나를 선택해 주세요." },
         { status: 400 },
       );
     }
