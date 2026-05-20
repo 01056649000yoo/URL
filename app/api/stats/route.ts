@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { execSync } from "node:child_process";
 
 type LinkSnapshot = {
   is_active: boolean;
@@ -41,11 +42,20 @@ export async function GET() {
     const createdCount = statsResult.data?.total_created ?? 0;
     const deletedCount = statsResult.data?.total_deleted ?? 0;
 
+    let commitHash = "";
+    try {
+      commitHash = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    } catch {
+      // Fallback if git CLI is not installed or not in a git repo
+      commitHash = "unknown";
+    }
+
     return NextResponse.json({
       totalCount,
       createdCount,
       activeCount,
       deletedCount,
+      commitHash,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";

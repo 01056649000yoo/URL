@@ -21,6 +21,7 @@ type StatsResult = {
   createdCount?: number;
   activeCount?: number;
   deletedCount?: number;
+  commitHash?: string;
   error?: string;
 };
 
@@ -71,6 +72,7 @@ export default function HomePage() {
     createdCount: 0,
     activeCount: 0,
     deletedCount: 0,
+    commitHash: "",
   });
 
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
@@ -150,6 +152,7 @@ export default function HomePage() {
           createdCount: data.createdCount ?? 0,
           activeCount: data.activeCount ?? 0,
           deletedCount: data.deletedCount ?? 0,
+          commitHash: data.commitHash ?? "",
         });
       } catch {
         // 통계는 보조 정보이므로 조용히 무시합니다.
@@ -451,6 +454,29 @@ export default function HomePage() {
             />
             <p className="qr-modal-link">{resultUrl}</p>
           </div>
+        </div>
+      ) : null}
+      {stats.commitHash ? (
+        <div style={{
+          position: "fixed",
+          bottom: "12px",
+          right: "12px",
+          fontSize: "11px",
+          color: "rgba(100, 116, 139, 0.8)",
+          backgroundColor: "rgba(241, 245, 249, 0.9)",
+          border: "1px solid rgba(226, 232, 240, 0.8)",
+          padding: "3px 8px",
+          borderRadius: "6px",
+          pointerEvents: "none",
+          zIndex: 9999,
+          fontFamily: "var(--font-mono, monospace)",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+        }}>
+          <span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#10b981" }} />
+          commit: {stats.commitHash}
         </div>
       ) : null}
     </main>
