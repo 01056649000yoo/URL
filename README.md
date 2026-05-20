@@ -105,6 +105,29 @@ docker compose --env-file .env.local logs -f app
 docker compose --env-file .env.local logs -f cleanup
 ```
 
+## 배포 업데이트
+
+현재 운영은 `app`과 `cleanup` 두 컨테이너만 사용합니다. 새 코드를 반영할 때는 서버에서 수동으로 최신 코드를 받고 다시 빌드합니다.
+
+1. 최신 코드를 가져옵니다.
+
+```bash
+git pull
+```
+
+2. 컨테이너를 다시 빌드해 올립니다.
+
+```bash
+docker compose --env-file .env.local up -d --build
+```
+
+3. 필요하면 로그를 확인합니다.
+
+```bash
+docker compose --env-file .env.local logs -f app
+docker compose --env-file .env.local logs -f cleanup
+```
+
 ## 데이터 이전
 
 원격 Supabase에서 로컬 Supabase로 옮길 때는 먼저 로컬 스키마를 적용한 뒤, `public` 데이터만 가져오는 방식이 가장 단순합니다.

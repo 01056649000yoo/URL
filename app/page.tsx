@@ -741,6 +741,13 @@ export default function HomePage() {
           <strong>자리배치, 역할배치, 자리배치 기반 문해력 활동 웹앱 문해력 서바이벌</strong>
           <span className="project-banner-link">survival.끄적끄적아지트.site</span>
         </a>
+
+        <footer className="site-footer" aria-label="사업자 정보">
+          <p>상호명: 끄적끄적 아지트</p>
+          <p>운영책임자: 유승현</p>
+          <p>문의: <a href="mailto:yshgg@naver.com">yshgg@naver.com</a></p>
+          <p>© 2026 끄적끄적 아지트. All rights reserved.</p>
+        </footer>
       </section>
 
       {isQrOpen && resultUrl ? (
