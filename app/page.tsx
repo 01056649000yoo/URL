@@ -39,7 +39,7 @@ type MyLinksResult = {
   error?: string;
 };
 
-type RetentionPeriod = "day" | "week" | "month";
+type RetentionPeriod = "day" | "week" | "month" | "quarter";
 
 const BRAND_DOMAIN = "샘링크.kr";
 const PAGE_TITLE = "수업링크를 짧게 QR로";
@@ -259,6 +259,7 @@ export default function HomePage() {
               <option value="day">1일</option>
               <option value="week">1주일</option>
               <option value="month">1달</option>
+              <option value="quarter">3개월</option>
             </select>
           </label>
 

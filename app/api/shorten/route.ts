@@ -10,7 +10,7 @@ type CreateLinkPayload = {
   destination?: string;
   slug?: string;
   createdBy?: string;
-  retentionPeriod?: "day" | "week" | "month";
+  retentionPeriod?: "day" | "week" | "month" | "quarter";
 };
 
 function toDisplayUrl(shortUrl: string) {
@@ -31,6 +31,8 @@ function retentionDaysFromPeriod(period: CreateLinkPayload["retentionPeriod"]) {
       return 7;
     case "month":
       return 30;
+    case "quarter":
+      return 90;
     default:
       return null;
   }
