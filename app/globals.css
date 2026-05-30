@@ -16,9 +16,14 @@
 
 * {
   box-sizing: border-box;
+  max-width: 100%;
 }
 
 html {
+  overflow-x: hidden;
+}
+
+body {
   overflow-x: hidden;
 }
 
@@ -35,19 +40,29 @@ body {
     linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
 }
 
+img {
+  max-width: 100%;
+  height: auto;
+}
+
 a {
   color: inherit;
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
+  min-width: 0;
 }
 
 .shell {
   width: min(840px, calc(100% - 32px));
+  max-width: 100%;
   margin: 0 auto;
   padding: 56px 0 72px;
+  overflow-x: hidden;
 }
 
 .panel {
@@ -149,6 +164,7 @@ input {
 
 .brand-logo {
   width: auto;
+  max-width: 100%;
   height: 92px;
   object-fit: contain;
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.4s ease;
@@ -205,6 +221,7 @@ input {
 .label {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .label span {
@@ -215,6 +232,7 @@ input {
 
 .field {
   width: 100%;
+  min-width: 0;
   border: 2px solid transparent;
   border-radius: 20px;
   background: #fff;
