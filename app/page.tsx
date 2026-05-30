@@ -57,7 +57,7 @@ const MY_LINKS_KEY = "samlink-my-links";
 const MAX_SAVED_LINKS = 30;
 
 const BRAND_DOMAIN = "샘링크.kr";
-const PAGE_TITLE = "수업링크를 짧게 QR로";
+const PAGE_TITLE = "샘링크 | 수업링크를 짧고 간편하게, QR코드로 바로 접속";
 
 type SavedLink = CreateResult & {
   savedAt: string;
