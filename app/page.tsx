@@ -605,8 +605,8 @@ export default function HomePage() {
 
         <section className="my-links-card" aria-live="polite">
           <div className="result-head">
-            <strong>내가 만든 링크</strong>
-            <span className="result-tip">이 브라우저에서 만든 최근 링크를 다시 보여줍니다.</span>
+            <strong>이 기기에서 생성한 링크 (실시간 상태)</strong>
+            <span className="result-tip">이 브라우저 쿠키를 기반으로 서버에 기록된 최신 단축링크의 실시간 활성/만료 상태입니다.</span>
           </div>
 
           {isLoadingMyLinks ? (
@@ -647,16 +647,16 @@ export default function HomePage() {
               ) : null}
             </div>
           ) : (
-            <p className="empty-result">이 브라우저에서 만든 링크가 아직 없습니다.</p>
+            <p className="empty-result">최근 이 기기에서 생성한 단축링크 내역이 없습니다.</p>
           )}
         </section>
 
         {error ? <p className="error">{error}</p> : null}
 
-        <section className="result-card" aria-label="내가 만든 링크">
+        <section className="result-card" aria-label="링크 대시보드 및 QR 보관함">
           <div className="result-head">
-            <strong>내가 만든 링크</strong>
-            <span className="result-tip">이 브라우저에 저장된 최근 링크</span>
+            <strong>링크 대시보드 & QR 보관함</strong>
+            <span className="result-tip">링크를 클릭하면 실시간 클릭수 통계, 방문자 분석 및 QR 코드를 크게 볼 수 있는 상세 대시보드가 열립니다.</span>
           </div>
 
           {savedLinks.length ? (
@@ -686,7 +686,7 @@ export default function HomePage() {
             </div>
           ) : (
             <p className="empty-result">
-              아직 이 브라우저에 저장된 링크가 없습니다. 링크를 만들면 자동으로 여기에 쌓입니다.
+              보관된 링크가 없습니다. 새로운 단축링크를 생성하면 대시보드가 여기에 자동으로 등록됩니다.
             </p>
           )}
         </section>
