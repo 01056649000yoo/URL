@@ -139,6 +139,175 @@ export default function HomePage() {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isSystemPipActive, setIsSystemPipActive] = useState(false);
+
+  const handleSystemAlwaysOnTop = async (url: string, slug: string) => {
+    try {
+      // 1. Try Document Picture-in-Picture API (Chrome/Edge/Opera 116+)
+      if (typeof window !== "undefined" && "documentPictureInPicture" in window) {
+        const docPiP = (window as any).documentPictureInPicture;
+        
+        // Request always-on-top window
+        const pipWindow = await docPiP.requestWindow({
+          width: 250,
+          height: 310,
+        });
+
+        setIsSystemPipActive(true);
+        setPinnedQrUrl(url);
+        setPinnedSlug(slug);
+
+        // Copy styles so it looks beautiful
+        const styleSheets = Array.from(document.styleSheets);
+        styleSheets.forEach((styleSheet) => {
+          try {
+            const cssRules = Array.from(styleSheet.cssRules)
+              .map((rule) => rule.cssText)
+              .join('');
+            const style = pipWindow.document.createElement('style');
+            style.textContent = cssRules;
+            pipWindow.document.head.appendChild(style);
+          } catch {
+            if (styleSheet.href) {
+              const link = pipWindow.document.createElement('link');
+              link.rel = 'stylesheet';
+              link.href = styleSheet.href;
+              pipWindow.document.head.appendChild(link);
+            }
+          }
+        });
+
+        // Add custom styled wrapper
+        pipWindow.document.body.style.margin = "0";
+        pipWindow.document.body.style.padding = "0";
+        pipWindow.document.body.style.overflow = "hidden";
+        pipWindow.document.body.style.backgroundColor = "#F8FAFC"; // slate-50
+
+        const container = pipWindow.document.createElement('div');
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.alignItems = "center";
+        container.style.justifyContent = "center";
+        container.style.height = "100vh";
+        container.style.boxSizing = "border-box";
+        container.style.padding = "16px";
+        container.style.fontFamily = "'Pretendard', sans-serif";
+
+        const qrImgUrl = `/api/qr?size=320&margin=10&data=${encodeURIComponent(url)}`;
+        const shortLabel = url.replace(/^https?:\/\//, "");
+
+        container.innerHTML = `
+          <div style="
+            background: white;
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 4px 16px rgba(79, 108, 251, 0.08);
+            border: 1px solid rgba(79, 108, 251, 0.12);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+          ">
+            <div style="font-size: 11px; font-weight: 800; color: #4F46E5; letter-spacing: 1px; margin-bottom: 8px;">📌 샘링크 QR 고정</div>
+            <img src="${qrImgUrl}" style="width: 85%; height: auto; object-fit: contain; border-radius: 8px; margin-bottom: 8px;" />
+            <div style="font-size: 11px; font-weight: 900; color: #214ad8; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;">${shortLabel}</div>
+          </div>
+        `;
+
+        pipWindow.document.body.appendChild(container);
+
+        // When closed, reset state
+        pipWindow.addEventListener("pagehide", () => {
+          setIsSystemPipActive(false);
+          setPinnedQrUrl(null);
+          setPinnedSlug(null);
+        });
+
+        return;
+      }
+
+      // 2. Fallback to Canvas + Video Picture-in-Picture (Safari / Firefox / older browsers)
+      if (typeof document !== "undefined" && "pictureInPictureEnabled" in document && (document as any).pictureInPictureEnabled) {
+        setIsSystemPipActive(true);
+        setPinnedQrUrl(url);
+        setPinnedSlug(slug);
+
+        const qrImgUrl = `/api/qr?size=400&margin=15&data=${encodeURIComponent(url)}`;
+        const shortLabel = url.replace(/^https?:\/\//, "");
+
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = qrImgUrl;
+        img.onload = async () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 400;
+          canvas.height = 460;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+
+          // Draw background with soft gradient
+          const grad = ctx.createLinearGradient(0, 0, 0, 460);
+          grad.addColorStop(0, "#F8FAFC");
+          grad.addColorStop(1, "#EFF6FF");
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, 400, 460);
+
+          // Draw white card for QR
+          ctx.fillStyle = "#FFFFFF";
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(20, 20, 360, 360, 24) : ctx.rect(20, 20, 360, 360);
+          ctx.fill();
+          
+          // Draw thin border on card
+          ctx.strokeStyle = "rgba(79, 108, 251, 0.12)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Center and draw the QR image
+          ctx.drawImage(img, 35, 35, 330, 330);
+
+          // Draw Title
+          ctx.fillStyle = "#4F46E5";
+          ctx.font = "bold 14px 'Pretendard', sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("📌 샘링크 QR 고정 모드", 200, 410);
+
+          // Draw Short Link text below
+          ctx.fillStyle = "#1E293B";
+          ctx.font = "900 16px 'Pretendard', sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(shortLabel, 200, 435);
+
+          // Setup hidden video
+          const video = document.createElement("video");
+          video.muted = true;
+          video.playsInline = true;
+          (video as any).srcObject = canvas.captureStream(10); // 10 FPS
+          
+          await video.play();
+          await video.requestPictureInPicture();
+
+          // Monitor PiP exit
+          video.addEventListener("leavepictureinpicture", () => {
+            setIsSystemPipActive(false);
+            setPinnedQrUrl(null);
+            setPinnedSlug(null);
+          });
+        };
+        return;
+      }
+
+      // 3. Browser doesn't support AOT, alert and use standard floating overlay
+      alert("이 브라우저에서는 시스템 화면 최상단 고정 기능이 직접 제공되지 않습니다. 대신 웹페이지 내 플로팅 고정 모드를 실행합니다.");
+      handlePinQr(url, slug);
+    } catch (e) {
+      console.error(e);
+      // Fallback
+      handlePinQr(url, slug);
+    }
+  };
 
   const handlePinQr = (url: string, slug: string) => {
     setPinnedQrUrl(url);
@@ -655,14 +824,24 @@ export default function HomePage() {
                 <img className="qr-thumb" src={qrImageUrl} alt="단축링크 QR 코드" />
               </button>
 
-              <div className="qr-action-row">
+              <div className="qr-action-row" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  className="qr-action-btn pin-btn"
+                  type="button"
+                  onClick={() => handleSystemAlwaysOnTop(resultUrl, result.slug)}
+                  title="PPT, 한글, 다른 웹사이트 등 어떤 화면을 열어도 항상 화면 가장 위에 떠 있습니다."
+                  style={{ flex: "1 1 140px" }}
+                >
+                  🖥️ 항상 위에 띄우기 (AOT)
+                </button>
                 <button
                   className="qr-action-btn pin-btn"
                   type="button"
                   onClick={() => handlePinQr(resultUrl, result.slug)}
-                  title="마우스로 크기 조절이 가능하며 화면 상단에 항시 플로팅됩니다"
+                  title="현재 웹 브라우저 화면 안에서 자유롭게 크기와 위치를 조절하며 고정합니다."
+                  style={{ flex: "1 1 140px", backgroundColor: "rgba(79, 108, 251, 0.05)", color: "#4f6cfb" }}
                 >
-                  📌 화면 상단 고정 모드
+                  📌 페이지 내 플로팅 고정
                 </button>
               </div>
 
@@ -917,12 +1096,24 @@ export default function HomePage() {
                   className="mini-button pin-btn"
                   type="button"
                   onClick={() => {
+                    handleSystemAlwaysOnTop(selectedSavedUrl, selectedSavedLink.slug);
+                    setSelectedSavedSlug(null);
+                  }}
+                  title="PPT, 한글, 다른 프로그램 등 어떤 화면 위에든 항상 상단에 띄웁니다."
+                >
+                  🖥️ 항상 위에 고정 (AOT)
+                </button>
+                <button
+                  className="mini-button pin-btn"
+                  type="button"
+                  onClick={() => {
                     handlePinQr(selectedSavedUrl, selectedSavedLink.slug);
                     setSelectedSavedSlug(null);
                   }}
-                  title="화면 상단에 고정하여 크기 및 위치를 자유롭게 조절할 수 있습니다"
+                  title="현재 페이지 내에서 플로팅 박스로 고정합니다."
+                  style={{ backgroundColor: "rgba(79, 108, 251, 0.1)", color: "var(--brand-strong)" }}
                 >
-                  📌 화면 고정
+                  📌 페이지 내 고정
                 </button>
               </div>
             </div>
