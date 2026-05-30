@@ -1180,3 +1180,191 @@ input {
     line-height: 1.7;
   }
 }
+
+/* ==========================================
+   📌 QR Code Floating Pin Mode (상단 고정 모드)
+   ========================================== */
+.floating-qr-container {
+  position: fixed;
+  width: 220px;
+  height: 280px;
+  min-width: 170px;
+  min-height: 220px;
+  max-width: 600px;
+  max-height: 650px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(79, 108, 251, 0.22);
+  border-radius: 20px;
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.08),
+    0 30px 60px rgba(79, 108, 251, 0.15),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  resize: both;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+  user-select: none;
+}
+
+.floating-qr-container:hover {
+  border-color: rgba(79, 108, 251, 0.4);
+  box-shadow: 
+    0 12px 35px rgba(0, 0, 0, 0.1),
+    0 35px 70px rgba(79, 108, 251, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
+.floating-qr-container.dragging {
+  cursor: grabbing;
+  border-color: var(--brand);
+  box-shadow: 
+    0 15px 40px rgba(0, 0, 0, 0.12),
+    0 40px 80px rgba(79, 108, 251, 0.35);
+  transform: scale(1.02);
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, rgba(79, 108, 251, 0.08), rgba(236, 72, 153, 0.08));
+  border-bottom: 1px solid rgba(79, 108, 251, 0.1);
+  cursor: grab;
+  height: 38px;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-indicator-group {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.drag-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--brand);
+  opacity: 0.5;
+}
+
+.drag-title {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #1f2937;
+  letter-spacing: -0.02em;
+  margin-left: 6px;
+  margin-right: auto;
+}
+
+.drag-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.06);
+  color: #4b5563;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: bold;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.drag-close-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.floating-qr-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  padding: 10px;
+  min-height: 0;
+  position: relative;
+}
+
+.floating-qr-img {
+  max-width: 90%;
+  max-height: 80%;
+  object-fit: contain;
+  border-radius: 12px;
+  background: white;
+  padding: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 8px;
+}
+
+.floating-qr-footer {
+  width: 100%;
+  text-align: center;
+  margin-top: auto;
+  padding-bottom: 2px;
+}
+
+.floating-qr-link {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--brand-strong);
+  text-decoration: none;
+  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.floating-qr-link:hover {
+  text-decoration: underline;
+}
+
+/* QR Action row styles inside page.tsx */
+.qr-action-row {
+  display: flex;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.qr-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  padding: 11px 14px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.qr-action-btn.pin-btn {
+  background: rgba(79, 108, 251, 0.09);
+  color: var(--brand-strong);
+  border: 1px solid rgba(79, 108, 251, 0.15);
+}
+
+.qr-action-btn.pin-btn:hover {
+  background: var(--brand);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 108, 251, 0.2);
+}
+

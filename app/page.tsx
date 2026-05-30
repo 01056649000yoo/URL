@@ -131,6 +131,83 @@ export default function HomePage() {
     commitHash: "",
   });
 
+  // ==========================================
+  // 📌 QR Code Floating Pin Mode State & Logic
+  // ==========================================
+  const [pinnedQrUrl, setPinnedQrUrl] = useState<string | null>(null);
+  const [pinnedSlug, setPinnedSlug] = useState<string | null>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  const handlePinQr = (url: string, slug: string) => {
+    setPinnedQrUrl(url);
+    setPinnedSlug(slug);
+    
+    // Position at top-right by default based on current window width
+    if (typeof window !== "undefined") {
+      const defaultX = window.innerWidth - 260;
+      const defaultY = 40;
+      setPosition({ x: defaultX > 10 ? defaultX : 10, y: defaultY });
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest(".drag-handle")) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+      e.preventDefault();
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest(".drag-handle")) {
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStart({ x: touch.clientX - position.x, y: touch.clientY - position.y });
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      const newX = Math.max(10, Math.min(window.innerWidth - 100, e.clientX - dragStart.x));
+      const newY = Math.max(10, Math.min(window.innerHeight - 100, e.clientY - dragStart.y));
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging) return;
+      const touch = e.touches[0];
+      const newX = Math.max(10, Math.min(window.innerWidth - 100, touch.clientX - dragStart.x));
+      const newY = Math.max(10, Math.min(window.innerHeight - 100, touch.clientY - dragStart.y));
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleTouchEnd = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("touchmove", handleTouchMove, { passive: true });
+      window.addEventListener("touchend", handleTouchEnd);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [isDragging, dragStart]);
+
+
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
   const selectedSavedLink = savedLinks.find((link) => link.slug === selectedSavedSlug) ?? null;
   const selectedSavedStats = selectedSavedLink ? savedLinkStats[selectedSavedLink.slug] : null;
@@ -578,6 +655,17 @@ export default function HomePage() {
                 <img className="qr-thumb" src={qrImageUrl} alt="단축링크 QR 코드" />
               </button>
 
+              <div className="qr-action-row">
+                <button
+                  className="qr-action-btn pin-btn"
+                  type="button"
+                  onClick={() => handlePinQr(resultUrl, result.slug)}
+                  title="마우스로 크기 조절이 가능하며 화면 상단에 항시 플로팅됩니다"
+                >
+                  📌 화면 상단 고정 모드
+                </button>
+              </div>
+
               {result.expiresAt ? (
                 <p className="result-meta">만료 예정: {formatDateTime(result.expiresAt)}</p>
               ) : null}
@@ -825,6 +913,17 @@ export default function HomePage() {
                 >
                   다운로드
                 </a>
+                <button
+                  className="mini-button pin-btn"
+                  type="button"
+                  onClick={() => {
+                    handlePinQr(selectedSavedUrl, selectedSavedLink.slug);
+                    setSelectedSavedSlug(null);
+                  }}
+                  title="화면 상단에 고정하여 크기 및 위치를 자유롭게 조절할 수 있습니다"
+                >
+                  📌 화면 고정
+                </button>
               </div>
             </div>
             <div className="public-footer-banner" aria-label={`${selectedSavedLink.slug} 링크 통계`}>
@@ -935,6 +1034,58 @@ export default function HomePage() {
           commit: {stats.commitHash}
         </div>
       ) : null}
+
+      {/* 📌 QR Code Floating Pin Mode Widget */}
+      {pinnedQrUrl && (
+        <div
+          className={`floating-qr-container ${isDragging ? "dragging" : ""}`}
+          style={{
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+          }}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+        >
+          <div className="drag-handle" title="드래그하여 이동">
+            <div className="drag-indicator-group" aria-hidden="true">
+              <span className="drag-dot"></span>
+              <span className="drag-dot"></span>
+              <span className="drag-dot"></span>
+            </div>
+            <span className="drag-title">📌 QR 고정 플로팅</span>
+            <button
+              className="drag-close-btn"
+              onClick={() => {
+                setPinnedQrUrl(null);
+                setPinnedSlug(null);
+              }}
+              title="고정 해제"
+              aria-label="고정 해제"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="floating-qr-body">
+            <img
+              src={`/api/qr?size=400&margin=10&data=${encodeURIComponent(pinnedQrUrl)}`}
+              alt="화면에 고정된 QR 코드"
+              className="floating-qr-img"
+              draggable={false}
+            />
+            <div className="floating-qr-footer">
+              <a
+                href={pinnedQrUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="floating-qr-link"
+                title={pinnedQrUrl}
+              >
+                {pinnedQrUrl.replace(/^https?:\/\//, "")}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
