@@ -14,19 +14,15 @@ jobs:
   deploy:
     runs-on: self-hosted
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: /Users/seunghyeonmaegmini/URL
-
     steps:
-      - name: Pull latest main
-        run: |
-          git fetch origin main
-          git checkout main
-          git reset --hard origin/main
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+
+      - name: Copy .env.local from host
+        run: cp /Users/seunghyeonmaegmini/URL/.env.local .
 
       - name: Build docker image
-        run: docker compose --env-file .env.local build
+        run: docker compose --env-file .env.local build --no-cache
 
       - name: Restart docker stack
         run: docker compose --env-file .env.local up -d --remove-orphans
