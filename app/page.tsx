@@ -237,7 +237,7 @@ export default function HomePage() {
         const qrImgUrl = `/api/qr?size=400&margin=15&data=${encodeURIComponent(url)}`;
         const shortLabel = url.replace(/^https?:\/\//, "");
 
-        const img = new Image();
+        const img = new window.Image();
         img.crossOrigin = "anonymous";
         img.src = qrImgUrl;
         img.onload = async () => {
