@@ -501,7 +501,7 @@ export default function HomePage() {
           <header className="brand-bar">
             <Image
               className="brand-logo"
-              src="/samlink-logo.svg"
+              src="/samlink-logo.svg?v=2"
               alt="샘링크 로고"
               width={320}
               height={92}
