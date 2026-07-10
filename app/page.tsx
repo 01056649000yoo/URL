@@ -64,6 +64,17 @@ type SavedLink = CreateResult & {
   label?: string;
 };
 
+type MergedLink = {
+  slug: string;
+  shortUrl: string;
+  displayShortUrl?: string;
+  destination: string;
+  label?: string;
+  expiresAt?: string | null;
+  isActive?: boolean;
+  sortAt?: string;
+};
+
 type SavedLinkStats = {
   clickCount: number;
   recentVisitors: number;
@@ -397,8 +408,48 @@ export default function HomePage() {
   const selectedSavedUrl = selectedSavedLink
     ? selectedSavedLink.displayShortUrl ?? selectedSavedLink.shortUrl
     : "";
-  const visibleMyLinks = isMyLinksExpanded ? myLinks : myLinks.slice(0, 1);
-  const hiddenMyLinkCount = Math.max(myLinks.length - visibleMyLinks.length, 0);
+
+  // 브라우저 저장 링크(별명·QR 보관)와 서버 기록(실시간 상태)을 슬러그 기준으로 하나의 목록으로 합칩니다.
+  const mergedLinks = useMemo(() => {
+    const map = new Map<string, MergedLink>();
+
+    for (const link of savedLinks) {
+      map.set(link.slug, {
+        slug: link.slug,
+        shortUrl: link.shortUrl,
+        displayShortUrl: link.displayShortUrl,
+        destination: link.destination,
+        label: link.label,
+        expiresAt: link.expiresAt,
+        sortAt: link.savedAt,
+      });
+    }
+
+    for (const link of myLinks) {
+      const existing = map.get(link.slug);
+      if (existing) {
+        existing.expiresAt = link.expiresAt ?? existing.expiresAt;
+        existing.isActive = link.isActive;
+      } else {
+        map.set(link.slug, {
+          slug: link.slug,
+          shortUrl: link.shortUrl,
+          displayShortUrl: link.displayShortUrl,
+          destination: link.destination,
+          expiresAt: link.expiresAt,
+          isActive: link.isActive,
+          sortAt: link.createdAt,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.sortAt ?? 0).getTime() - new Date(a.sortAt ?? 0).getTime(),
+    );
+  }, [savedLinks, myLinks]);
+
+  const visibleLinks = isMyLinksExpanded ? mergedLinks : mergedLinks.slice(0, 4);
+  const hiddenLinkCount = Math.max(mergedLinks.length - visibleLinks.length, 0);
 
   async function loadMyLinks() {
     setIsLoadingMyLinks(true);
@@ -751,6 +802,24 @@ export default function HomePage() {
     setExtendNotice("");
   }
 
+  // 서버에만 기록된 링크(브라우저 저장 이전 생성분 등)는 클릭 시 보관함에 넣어 동일하게 관리합니다.
+  function openMergedLink(link: MergedLink) {
+    if (!savedLinks.some((saved) => saved.slug === link.slug)) {
+      const adopted: SavedLink = {
+        slug: link.slug,
+        shortUrl: link.shortUrl,
+        displayShortUrl: link.displayShortUrl,
+        destination: link.destination,
+        expiresAt: link.expiresAt ?? undefined,
+        savedAt: new Date().toISOString(),
+      };
+      const merged = [adopted, ...savedLinks].slice(0, MAX_SAVED_LINKS);
+      setSavedLinks(merged);
+      writeSavedLinks(merged);
+    }
+    openSavedLink(link.slug);
+  }
+
   function saveLabel(slug: string) {
     const label = labelDraft.trim().slice(0, 40);
     const updated = savedLinks.map((link) =>
@@ -857,27 +926,39 @@ export default function HomePage() {
             />
           </label>
 
-          <label className="label">
+          <div className="label">
             <span>유지 기간</span>
-            <select className="field" name="retentionPeriod" defaultValue="week" required>
-              <option value="day">1일</option>
-              <option value="week">1주일</option>
-              <option value="month">1개월</option>
-              <option value="quarter">3개월</option>
-            </select>
-          </label>
+            <div className="retention-options" role="radiogroup" aria-label="유지 기간 선택">
+              {(
+                [
+                  { value: "day", text: "1일" },
+                  { value: "week", text: "1주일" },
+                  { value: "month", text: "1개월" },
+                  { value: "quarter", text: "3개월" },
+                ] as const
+              ).map((option) => (
+                <label className="retention-option" key={option.value}>
+                  <input
+                    type="radio"
+                    name="retentionPeriod"
+                    value={option.value}
+                    defaultChecked={option.value === "week"}
+                    required
+                  />
+                  <span>{option.text}</span>
+                </label>
+              ))}
+            </div>
+          </div>
 
           <button className="submit" type="submit" disabled={isSubmitting}>
             {isSubmitting ? "만드는 중..." : "단축링크 만들기"}
           </button>
+          <p className="form-hint">생성 형식: {BRAND_DOMAIN}/코드4자</p>
         </form>
 
-        <section className="result-card" aria-live="polite">
-          <div className="result-head result-head-primary">
-            <span className="result-tip">생성 형식: {BRAND_DOMAIN}/코드4자</span>
-          </div>
-
-          {result ? (
+        {result ? (
+          <section className="result-card" aria-live="polite">
             <div className="result-stack">
               <div className="result-row">
                 <a className="result-link" href={result.shortUrl} target="_blank" rel="noreferrer">
@@ -905,39 +986,6 @@ export default function HomePage() {
                 <img className="qr-thumb" src={qrImageUrl} alt="단축링크 QR 코드" />
               </button>
 
-              <div className="qr-action-row" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button
-                  className="qr-action-btn pin-btn"
-                  type="button"
-                  onClick={() => handleSystemAlwaysOnTop(resultUrl, result.slug)}
-                  title="PPT, 한글, 다른 웹사이트 등 어떤 화면을 열어도 항상 화면 가장 위에 떠 있습니다."
-                  style={{ flex: "1 1 140px" }}
-                >
-                  🖥️ 항상 위에 띄우기 (AOT)
-                </button>
-                <button
-                  className="qr-action-btn pin-btn"
-                  type="button"
-                  onClick={() => handlePinQr(resultUrl, result.slug)}
-                  title="현재 웹 브라우저 화면 안에서 자유롭게 크기와 위치를 조절하며 고정합니다."
-                  style={{ flex: "1 1 140px", backgroundColor: "rgba(79, 108, 251, 0.05)", color: "#4f6cfb" }}
-                >
-                  📌 페이지 내 플로팅 고정
-                </button>
-                <button
-                  className="qr-action-btn pin-btn"
-                  type="button"
-                  onClick={() => {
-                    const saved = savedLinks.find((link) => link.slug === result.slug);
-                    openQrPrintView(resultUrl, saved?.label ?? "", result.slug);
-                  }}
-                  title="제목과 QR 코드, 짧은 주소가 함께 들어간 A4 인쇄용 화면을 엽니다."
-                  style={{ flex: "1 1 140px", backgroundColor: "rgba(16, 185, 129, 0.06)", color: "#0f766e" }}
-                >
-                  🖨️ 인쇄용 QR
-                </button>
-              </div>
-
               {result.expiresAt ? (
                 <p className="result-meta">만료 예정: {formatDateTime(result.expiresAt)}</p>
               ) : null}
@@ -960,84 +1008,34 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-          ) : null}
-        </section>
-
-        <section className="my-links-card" aria-live="polite">
-          <div className="result-head">
-            <strong>이 기기에서 생성한 링크 (실시간 상태)</strong>
-            <span className="result-tip">이 브라우저 쿠키를 기반으로 서버에 기록된 최신 단축링크의 실시간 활성/만료 상태입니다.</span>
-          </div>
-
-          {isLoadingMyLinks ? (
-            <p className="empty-result">불러오는 중...</p>
-          ) : myLinks.length ? (
-            <div className="my-links-list">
-              {visibleMyLinks.map((link) => {
-                const shortUrl = link.displayShortUrl ?? link.shortUrl;
-                const isExpired = link.expiresAt ? new Date(link.expiresAt).getTime() <= Date.now() : false;
-                const statusLabel = !link.isActive ? "비활성" : isExpired ? "만료됨" : "사용 가능";
-                const expiryBadge = link.isActive && !isExpired ? getExpiryBadge(link.expiresAt) : null;
-
-                return (
-                  <article className="my-link-item" key={link.slug}>
-                    <div className="my-link-main">
-                      <a className="my-link-url" href={link.shortUrl} target="_blank" rel="noreferrer">
-                        {shortUrl}
-                      </a>
-                      <span className={link.isActive && !isExpired ? "my-link-status active" : "my-link-status"}>
-                        {statusLabel}
-                      </span>
-                      {expiryBadge ? (
-                        <span className={expiryBadge.urgent ? "expiry-badge urgent" : "expiry-badge"}>
-                          ⏳ {expiryBadge.text}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="my-link-destination">{link.destination}</p>
-                    <p className="my-link-meta">
-                      생성 {formatDateTime(link.createdAt)}
-                      {link.expiresAt ? ` · 만료 ${formatDateTime(link.expiresAt)}` : ""}
-                    </p>
-                  </article>
-                );
-              })}
-              {myLinks.length > 1 ? (
-                <button
-                  className="my-links-toggle"
-                  type="button"
-                  onClick={() => setIsMyLinksExpanded((current) => !current)}
-                >
-                  {isMyLinksExpanded ? "접기" : `더 보기 ${hiddenMyLinkCount}개`}
-                </button>
-              ) : null}
-            </div>
-          ) : (
-            <p className="empty-result">최근 이 기기에서 생성한 단축링크 내역이 없습니다.</p>
-          )}
-        </section>
+          </section>
+        ) : null}
 
         {error ? <p className="error">{error}</p> : null}
 
-        <section className="result-card" aria-label="링크 대시보드 및 QR 보관함">
+        <section className="result-card" aria-label="내 링크">
           <div className="result-head">
-            <strong>링크 대시보드 & QR 보관함</strong>
-            <span className="result-tip">링크를 클릭하면 실시간 클릭수 통계, 방문자 분석 및 QR 코드를 크게 볼 수 있는 상세 대시보드가 열립니다.</span>
+            <strong>내 링크</strong>
+            <span className="result-tip">이 브라우저에서 만든 링크입니다. 카드를 누르면 통계·QR·별명·만료 연장을 관리할 수 있어요.</span>
           </div>
 
-          {savedLinks.length ? (
+          {mergedLinks.length ? (
             <div className="saved-links-list">
-              {savedLinks.map((link) => {
+              {visibleLinks.map((link) => {
                 const linkUrl = link.displayShortUrl ?? link.shortUrl;
                 const statsForLink = savedLinkStats[link.slug];
-                const expiryBadge = getExpiryBadge(statsForLink?.expiresAt ?? link.expiresAt);
+                const effectiveExpiresAt = statsForLink?.expiresAt ?? link.expiresAt;
+                const linkExpired = isExpired(effectiveExpiresAt);
+                const isDead = link.isActive === false || linkExpired;
+                const expiryBadge = isDead ? null : getExpiryBadge(effectiveExpiresAt);
 
                 return (
                   <button
                     className="saved-link-item"
                     type="button"
                     key={link.slug}
-                    onClick={() => openSavedLink(link.slug)}
+                    disabled={isDead}
+                    onClick={() => openMergedLink(link)}
                   >
                     <div className="saved-link-item-main">
                       {link.label ? <span className="saved-link-label">{link.label}</span> : null}
@@ -1045,6 +1043,11 @@ export default function HomePage() {
                       <span>{link.destination}</span>
                     </div>
                     <div className="saved-link-item-meta">
+                      {isDead ? (
+                        <span className="my-link-status">
+                          {link.isActive === false ? "비활성" : "만료됨"}
+                        </span>
+                      ) : null}
                       {expiryBadge ? (
                         <span className={expiryBadge.urgent ? "expiry-badge urgent" : "expiry-badge"}>
                           ⏳ {expiryBadge.text}
@@ -1056,60 +1059,43 @@ export default function HomePage() {
                   </button>
                 );
               })}
+              {hiddenLinkCount > 0 || isMyLinksExpanded ? (
+                <button
+                  className="my-links-toggle"
+                  type="button"
+                  onClick={() => setIsMyLinksExpanded((current) => !current)}
+                >
+                  {isMyLinksExpanded ? "접기" : `더 보기 ${hiddenLinkCount}개`}
+                </button>
+              ) : null}
             </div>
+          ) : isLoadingMyLinks ? (
+            <p className="empty-result">불러오는 중...</p>
           ) : (
             <p className="empty-result">
-              보관된 링크가 없습니다. 새로운 단축링크를 생성하면 대시보드가 여기에 자동으로 등록됩니다.
+              아직 만든 링크가 없습니다. 단축링크를 만들면 여기에 자동으로 보관됩니다.
             </p>
           )}
         </section>
 
-        <div className="public-footer-banner" aria-label="샘링크 통계">
-          <div className="banner-card">
-            <span className="banner-label">누적 생성 주소</span>
-            <strong>{stats.createdCount}</strong>
-            <span className="banner-subtext">삭제된 주소까지 포함</span>
-          </div>
-          <div className="banner-card">
-            <span className="banner-label">활성 링크 수</span>
-            <strong>{stats.activeCount}</strong>
-            <span className="banner-subtext">활성 링크 기준</span>
-          </div>
-          <div className="banner-card">
-            <span className="banner-label">자동 삭제됨</span>
-            <strong>{stats.deletedCount}</strong>
-            <span className="banner-subtext">만료 후 정리된 수</span>
-          </div>
-        </div>
+        <p className="global-stats-line" aria-label="샘링크 통계">
+          지금까지 <strong>{stats.createdCount.toLocaleString()}개</strong>의 단축 주소가 만들어졌고, 현재{" "}
+          <strong>{stats.activeCount.toLocaleString()}개</strong>가 사용 중이에요.
+        </p>
 
         <p className="warning-note">
           오용과 남용을 막기 위해 과도한 생성, 자동화된 요청, 비정상적인 사용은 제한될 수 있습니다.
         </p>
 
-        <a
-          className="project-banner"
-          href="https://끄적끄적아지트.site"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="끄적끄적아지트 사이트로 이동"
-        >
-          <span className="project-banner-kicker">연결 사이트</span>
-          <strong>선생님이 만든 초등학생 글쓰기 통합 플랫폼</strong>
-          <span className="project-banner-link">끄적끄적아지트.site</span>
-        </a>
-
-        <a
-          className="project-banner"
-          href="https://survival.xn--vz0ba242ncqcba79xhwx.site/"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="문해력서바이벌 사이트로 이동"
-        >
-          <span className="project-banner-kicker">연결 사이트</span>
-          <strong>자리배치, 역할배치, 자리배치 기반 문해력 활동 웹앱 문해력 서바이벌</strong>
-          <span className="project-banner-link">survival.끄적끄적아지트.site</span>
-        </a>
-
+        <nav className="partner-links" aria-label="연결 사이트">
+          <span className="partner-links-kicker">연결 사이트</span>
+          <a href="https://끄적끄적아지트.site" target="_blank" rel="noreferrer">
+            끄적끄적아지트 <span>초등 글쓰기 통합 플랫폼</span>
+          </a>
+          <a href="https://survival.xn--vz0ba242ncqcba79xhwx.site/" target="_blank" rel="noreferrer">
+            문해력 서바이벌 <span>자리·역할배치 기반 문해력 활동</span>
+          </a>
+        </nav>
       </section>
 
       <footer className="site-footer" aria-label="사업자 정보">
@@ -1155,6 +1141,41 @@ export default function HomePage() {
               src={qrModalImageUrl}
               alt="단축링크 QR 코드 크게 보기"
             />
+            <div className="saved-link-actions qr-modal-actions">
+              <button
+                className="mini-button"
+                type="button"
+                onClick={() => {
+                  const saved = savedLinks.find((link) => link.slug === result?.slug);
+                  openQrPrintView(resultUrl, saved?.label ?? "", result?.slug ?? "code");
+                }}
+                title="제목과 QR 코드, 짧은 주소가 함께 들어간 A4 인쇄용 화면을 엽니다."
+              >
+                🖨️ 인쇄
+              </button>
+              <button
+                className="mini-button"
+                type="button"
+                onClick={() => {
+                  if (result) handleSystemAlwaysOnTop(resultUrl, result.slug);
+                  setIsQrOpen(false);
+                }}
+                title="PPT, 한글, 다른 웹사이트 등 어떤 화면을 열어도 항상 화면 가장 위에 떠 있습니다."
+              >
+                🖥️ 항상 위에 (AOT)
+              </button>
+              <button
+                className="mini-button"
+                type="button"
+                onClick={() => {
+                  if (result) handlePinQr(resultUrl, result.slug);
+                  setIsQrOpen(false);
+                }}
+                title="현재 웹 브라우저 화면 안에서 자유롭게 크기와 위치를 조절하며 고정합니다."
+              >
+                📌 화면에 고정
+              </button>
+            </div>
             <p className="qr-modal-link">{resultUrl}</p>
           </div>
         </div>
@@ -1242,6 +1263,7 @@ export default function HomePage() {
             </div>
             {extendNotice ? <p className="extend-notice">{extendNotice}</p> : null}
             <p className="result-meta">저장한 시각: {formatDateTime(selectedSavedLink.savedAt)}</p>
+            <hr className="modal-divider" />
             <div className="saved-link-qr-header">
               <strong>QR 코드</strong>
               <div className="saved-link-actions">
@@ -1263,10 +1285,10 @@ export default function HomePage() {
                   }
                   title="제목과 QR 코드, 짧은 주소가 함께 들어간 A4 인쇄용 화면을 엽니다."
                 >
-                  🖨️ 인쇄용 QR
+                  🖨️ 인쇄
                 </button>
                 <button
-                  className="mini-button pin-btn"
+                  className="mini-button"
                   type="button"
                   onClick={() => {
                     handleSystemAlwaysOnTop(selectedSavedUrl, selectedSavedLink.slug);
@@ -1274,22 +1296,22 @@ export default function HomePage() {
                   }}
                   title="PPT, 한글, 다른 프로그램 등 어떤 화면 위에든 항상 상단에 띄웁니다."
                 >
-                  🖥️ 항상 위에 고정 (AOT)
+                  🖥️ 항상 위에 (AOT)
                 </button>
                 <button
-                  className="mini-button pin-btn"
+                  className="mini-button"
                   type="button"
                   onClick={() => {
                     handlePinQr(selectedSavedUrl, selectedSavedLink.slug);
                     setSelectedSavedSlug(null);
                   }}
                   title="현재 페이지 내에서 플로팅 박스로 고정합니다."
-                  style={{ backgroundColor: "rgba(79, 108, 251, 0.1)", color: "var(--brand-strong)" }}
                 >
-                  📌 페이지 내 고정
+                  📌 화면에 고정
                 </button>
               </div>
             </div>
+            <hr className="modal-divider" />
             <div className="public-footer-banner" aria-label={`${selectedSavedLink.slug} 링크 통계`}>
               <div className="banner-card">
                 <span className="banner-label">총 클릭 수</span>
@@ -1307,6 +1329,7 @@ export default function HomePage() {
                 <span className="banner-subtext">쿠키 기준 방문자</span>
               </div>
             </div>
+            <hr className="modal-divider" />
             <div className="saved-link-actions">
               <button
                 className="mini-button"
@@ -1372,30 +1395,6 @@ export default function HomePage() {
             />
             <p className="qr-modal-link">{selectedSavedUrl}</p>
           </div>
-        </div>
-      ) : null}
-
-      {stats.commitHash ? (
-        <div style={{
-          position: "fixed",
-          bottom: "12px",
-          right: "12px",
-          fontSize: "11px",
-          color: "rgba(100, 116, 139, 0.8)",
-          backgroundColor: "rgba(241, 245, 249, 0.9)",
-          border: "1px solid rgba(226, 232, 240, 0.8)",
-          padding: "3px 8px",
-          borderRadius: "6px",
-          pointerEvents: "none",
-          zIndex: 9999,
-          fontFamily: "var(--font-mono, monospace)",
-          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-        }}>
-          <span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#10b981" }} />
-          commit: {stats.commitHash}
         </div>
       ) : null}
 
