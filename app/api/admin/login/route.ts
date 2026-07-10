@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { ADMIN_SESSION_COOKIE } from "@/lib/auth/admin";
+import { useSecureCookies } from "@/lib/site-url";
 
 type LoginPayload = {
   email?: string;
@@ -44,10 +46,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "관리자 계정이 아닙니다." }, { status: 403 });
     }
 
-    return NextResponse.json({
-      accessToken: data.session.access_token,
-      email: data.user.email,
+    const response = NextResponse.json({ email: data.user.email });
+    response.cookies.set({
+      name: ADMIN_SESSION_COOKIE,
+      value: data.session.access_token,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: useSecureCookies(),
+      path: "/",
+      maxAge: 60 * 60,
     });
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
     return NextResponse.json({ error: message }, { status: 500 });

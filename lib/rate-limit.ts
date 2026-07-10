@@ -1,12 +1,16 @@
 import { createHash } from "node:crypto";
 
 function pickClientIp(request: Request) {
+  if (process.env.TRUST_PROXY_HEADERS !== "true") {
+    return "unknown";
+  }
+
   const forwardedFor = request.headers.get("x-forwarded-for");
   const realIp = request.headers.get("x-real-ip");
   const connectingIp = request.headers.get("cf-connecting-ip");
   const vercelIp = request.headers.get("x-vercel-forwarded-for");
 
-  const raw = forwardedFor ?? realIp ?? connectingIp ?? vercelIp ?? "unknown";
+  const raw = connectingIp ?? vercelIp ?? realIp ?? forwardedFor ?? "unknown";
   return raw.split(",")[0]?.trim() || "unknown";
 }
 

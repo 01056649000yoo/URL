@@ -1,5 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 
+export const ADMIN_SESSION_COOKIE = "samlink_admin_session";
+
+function getCookieValue(request: Request, name: string) {
+  const cookies = request.headers.get("cookie") ?? "";
+  const pair = cookies
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${name}=`));
+
+  return pair ? decodeURIComponent(pair.slice(name.length + 1)) : "";
+}
+
 export async function requireAdminUser(request: Request) {
   const url = process.env.SUPABASE_INTERNAL_URL ?? process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
@@ -13,7 +25,8 @@ export async function requireAdminUser(request: Request) {
     throw new Error("ADMIN_EMAIL 이 설정되지 않았습니다.");
   }
 
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  const headerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  const token = headerToken || getCookieValue(request, ADMIN_SESSION_COOKIE);
   if (!token) {
     throw new Error("로그인이 필요합니다.");
   }

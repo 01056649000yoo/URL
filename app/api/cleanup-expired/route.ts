@@ -39,9 +39,6 @@ async function cleanupExpiredLinks(request: Request) {
   }
 
   const deletedCount = typeof data === "number" ? data : 0;
-  if (deletedCount > 0) {
-    await admin.rpc("increment_deleted_short_links", { amount: deletedCount });
-  }
 
   return NextResponse.json({ deleted: deletedCount });
 }

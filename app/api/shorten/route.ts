@@ -164,11 +164,6 @@ export async function POST(request: NextRequest) {
     }
 
     const shortUrl = `${getBaseUrl(request)}/${data.slug}`;
-    try {
-      await admin.rpc("increment_created_short_links", { amount: 1 });
-    } catch {
-      // 누적 통계는 보조 정보이므로 링크 생성 자체는 막지 않습니다.
-    }
 
     const response = NextResponse.json({
       slug: data.slug,

@@ -38,9 +38,6 @@ export async function GET(request: Request, context: RouteContext) {
       .delete()
       .eq("id", data.id)
       .select("id");
-    if (deleted?.length) {
-      await admin.rpc("increment_deleted_short_links", { amount: deleted.length });
-    }
     return NextResponse.json({ error: "링크가 만료되었습니다." }, { status: 404 });
   }
 

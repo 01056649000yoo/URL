@@ -42,7 +42,6 @@ const SITE_LABEL = "샘링크.kr";
 const ADMIN_SESSION_KEY = "samlink-admin-session";
 
 type AdminSession = {
-  accessToken: string;
   email: string;
 };
 
@@ -135,7 +134,7 @@ export default function AdminPage() {
       }
 
       const parsed = JSON.parse(raw) as AdminSession;
-      if (!parsed?.accessToken || !parsed?.email) {
+      if (!parsed?.email) {
         window.localStorage.removeItem(ADMIN_SESSION_KEY);
         setIsBooting(false);
         return;
@@ -150,7 +149,7 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (!session?.accessToken) {
+    if (!session?.email) {
       setLinks([]);
       setCreatedCount(0);
       setTodayCreated(0);
@@ -166,29 +165,25 @@ export default function AdminPage() {
       return;
     }
 
-    void loadLinks(session.accessToken);
+    void loadLinks();
   }, [session]);
 
   useEffect(() => {
-    if (!session?.accessToken) return;
+    if (!session?.email) return;
 
     const timer = window.setInterval(() => {
-      void loadLinks(session.accessToken);
+      void loadLinks();
     }, 30000);
 
     return () => window.clearInterval(timer);
   }, [session]);
 
-  async function loadLinks(token: string) {
+  async function loadLinks() {
     setIsLoadingLinks(true);
     setAuthError("");
 
     try {
-      const response = await fetch("/api/admin/links", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch("/api/admin/links");
 
       const data = (await response.json()) as LinksResponse;
       if (!response.ok) {
@@ -232,14 +227,13 @@ export default function AdminPage() {
       body: JSON.stringify({ email, password }),
     });
 
-    const data = (await response.json()) as { error?: string; accessToken?: string; email?: string };
-    if (!response.ok || !data.accessToken || !data.email) {
+    const data = (await response.json()) as { error?: string; email?: string };
+    if (!response.ok || !data.email) {
       setAuthError(data.error ?? "로그인에 실패했습니다.");
       return;
     }
 
     const nextSession = {
-      accessToken: data.accessToken,
       email: data.email,
     };
     setSession(nextSession);
@@ -249,6 +243,7 @@ export default function AdminPage() {
   }
 
   async function handleLogout() {
+    await fetch("/api/admin/logout", { method: "POST" }).catch(() => undefined);
     setSession(null);
     window.localStorage.removeItem(ADMIN_SESSION_KEY);
     setMessage("로그아웃했습니다.");
@@ -261,7 +256,7 @@ export default function AdminPage() {
   }
 
   async function mutateLink(id: number, action: "toggle" | "delete") {
-    if (!session?.accessToken) return;
+    if (!session?.email) return;
 
     setBusy(id, true);
     setMessage("");
@@ -272,14 +267,10 @@ export default function AdminPage() {
         action === "delete"
           ? await fetch(`/api/admin/links/${id}`, {
               method: "DELETE",
-              headers: {
-                Authorization: `Bearer ${session.accessToken}`,
-              },
             })
           : await fetch(`/api/admin/links/${id}`, {
               method: "PATCH",
               headers: {
-                Authorization: `Bearer ${session.accessToken}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
@@ -293,7 +284,7 @@ export default function AdminPage() {
       }
 
       setMessage(action === "delete" ? "링크를 삭제했습니다." : "링크 상태를 변경했습니다.");
-      await loadLinks(session.accessToken);
+      await loadLinks();
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : "작업을 완료하지 못했습니다.";
       setAuthError(text);
@@ -303,7 +294,7 @@ export default function AdminPage() {
   }
 
   async function bulkDelete() {
-    if (!session?.accessToken || selectedIds.length === 0) return;
+    if (!session?.email || selectedIds.length === 0) return;
 
     const confirmed = window.confirm(`선택한 ${selectedIds.length}개 링크를 삭제할까요?`);
     if (!confirmed) return;
@@ -315,7 +306,6 @@ export default function AdminPage() {
       const response = await fetch("/api/admin/links/bulk-delete", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ ids: selectedIds }),
@@ -327,7 +317,7 @@ export default function AdminPage() {
       }
 
       setMessage(`선택한 링크 ${data.deleted ?? 0}개를 삭제했습니다.`);
-      await loadLinks(session.accessToken);
+      await loadLinks();
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : "선택한 링크를 삭제하지 못했습니다.";
       setAuthError(text);
@@ -341,9 +331,6 @@ export default function AdminPage() {
     try {
       const response = await fetch("/api/cleanup-expired", {
         method: "POST",
-        headers: session?.accessToken
-          ? { Authorization: `Bearer ${session.accessToken}` }
-          : undefined,
       });
       const data = (await response.json()) as { error?: string; deleted?: number };
       if (!response.ok) {
@@ -351,8 +338,8 @@ export default function AdminPage() {
       }
 
       setMessage(`만료 링크 ${data.deleted ?? 0}개를 정리했습니다.`);
-      if (session?.accessToken) {
-        await loadLinks(session.accessToken);
+      if (session?.email) {
+        await loadLinks();
       }
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : "만료 링크 정리에 실패했습니다.";

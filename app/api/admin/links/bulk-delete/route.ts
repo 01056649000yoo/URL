@@ -27,10 +27,6 @@ export async function POST(request: Request) {
     }
 
     const deletedCount = data?.length ?? 0;
-    if (deletedCount > 0) {
-      await admin.rpc("increment_deleted_short_links", { amount: deletedCount });
-    }
-
     return NextResponse.json({ deleted: deletedCount });
   } catch (error) {
     const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";

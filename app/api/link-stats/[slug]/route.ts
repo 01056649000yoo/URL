@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getOrCreateDeviceId } from "@/lib/device-cookie";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type RouteContext = {
@@ -13,9 +14,10 @@ type LinkVisitStats = {
   today_visitors: number;
 };
 
-export async function GET(_: Request, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
+    const { deviceId } = getOrCreateDeviceId(request);
     const admin = createAdminClient();
     const recentThresholdIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const today = new Date();
@@ -25,12 +27,16 @@ export async function GET(_: Request, context: RouteContext) {
 
     const { data: link, error } = await admin
       .from("short_links")
-      .select("id, slug, click_count, is_active, expires_at")
+      .select("id, slug, click_count, is_active, expires_at, created_by")
       .eq("slug", slug)
       .maybeSingle();
 
     if (error || !link) {
       return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    if (link.created_by !== deviceId) {
+      return NextResponse.json({ error: "이 링크의 통계를 볼 권한이 없습니다." }, { status: 403 });
     }
 
     const { data: visitStatsData } = await admin.rpc("get_link_visit_stats", {

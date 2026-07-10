@@ -23,17 +23,19 @@ npm install
 `.env.local.example` 또는 `.env.example`을 `.env.local`로 복사한 뒤 값을 채웁니다.
 
 ```env
-NEXT_PUBLIC_SITE_URL=https://샘링크.kr
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SITE_URL=https://샘링크.kr
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ADMIN_EMAIL=admin@example.com
 SHORTENER_ADMIN_TOKEN=...
+TRUST_PROXY_HEADERS=false
 ```
 
 3. Supabase 스키마 실행
 
 Supabase SQL Editor 또는 `psql`로 [supabase/schema.sql](./supabase/schema.sql)을 실행합니다.
+기존 운영 DB에는 [20260710120000_hardening_and_stats_triggers.sql](./supabase/migrations/20260710120000_hardening_and_stats_triggers.sql)도 순서대로 적용합니다.
 
 4. 관리자 계정 생성
 
@@ -55,7 +57,8 @@ npm run dev
 ## 배포 메모
 
 - Vercel `Environment Variables`에 위 환경변수를 넣습니다.
-- `NEXT_PUBLIC_SITE_URL`은 실제 도메인으로 맞춥니다.
+- `SITE_URL`은 실제 도메인으로 맞춥니다.
+- `TRUST_PROXY_HEADERS`는 Cloudflare, Vercel 또는 신뢰할 수 있는 리버스 프록시가 원본 IP 헤더를 덮어쓸 때만 `true`로 설정합니다.
 - `ADMIN_EMAIL`은 관리자 계정 이메일과 같아야 합니다.
 
 ## 맥미니 Docker + 로컬 Supabase 운영
@@ -78,9 +81,10 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -f supabase/schema.
 cp .env.local.example .env.local
 ```
 
-- `NEXT_PUBLIC_SUPABASE_URL=http://host.docker.internal:54321`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`와 `SUPABASE_SERVICE_ROLE_KEY`는 `npx supabase start` 출력값을 사용합니다.
-- `NEXT_PUBLIC_SITE_URL`은 실제 접속 도메인으로 바꿉니다.
+- `SUPABASE_URL=http://host.docker.internal:54321`
+- `SUPABASE_ANON_KEY`와 `SUPABASE_SERVICE_ROLE_KEY`는 `npx supabase start` 출력값을 사용합니다.
+- `SITE_URL`은 실제 접속 도메인으로 바꿉니다.
+- 리버스 프록시를 사용한다면 프록시가 클라이언트 IP 헤더를 직접 덮어쓰는지 확인한 뒤 `TRUST_PROXY_HEADERS=true`로 설정합니다.
 
 4. 로컬 Supabase Studio에서 관리자 계정 생성
 
@@ -96,7 +100,7 @@ docker compose --env-file .env.local up -d --build
 
 - `app` 서비스가 Next.js 앱을 실행합니다.
 - `cleanup` 서비스가 1시간마다 `/api/cleanup-expired`를 호출해 만료 링크를 정리합니다.
-- Docker 빌드 시 `NEXT_PUBLIC_*` 값이 필요하므로 `--env-file .env.local` 옵션을 함께 사용합니다.
+- Docker 실행 시 `.env.local`의 서버 환경변수가 필요하므로 `--env-file .env.local` 옵션을 함께 사용합니다.
 
 6. 로그 확인
 

@@ -8,11 +8,6 @@ type RouteContext = {
   }>;
 };
 
-async function recordDeletedCount(admin: ReturnType<typeof createAdminClient>, count: number) {
-  if (count <= 0) return;
-  await admin.rpc("increment_deleted_short_links", { amount: count });
-}
-
 export async function PATCH(request: Request, context: RouteContext) {
   try {
     await requireAdminUser(request);
@@ -67,8 +62,6 @@ export async function DELETE(request: Request, context: RouteContext) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-
-    await recordDeletedCount(admin, data?.length ?? 0);
 
     return NextResponse.json({ deleted: true, deletedCount: data?.length ?? 0 });
   } catch (error) {

@@ -15,6 +15,9 @@ add column if not exists expires_at timestamptz;
 create index if not exists short_links_expires_at_idx
 on public.short_links (expires_at);
 
+create index if not exists short_links_created_by_created_at_idx
+on public.short_links (created_by, created_at desc);
+
 create table if not exists public.short_link_stats (
   key text primary key,
   total_created integer not null default 0,
@@ -407,3 +410,57 @@ as $$
   from public.short_link_visits v
   where v.visited_at >= least(p_recent_after, p_today_after);
 $$;
+
+-- 생성·삭제 카운터는 링크 테이블 변경과 같은 트랜잭션에서 갱신합니다.
+create or replace function public.sync_short_link_stats()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    perform public.increment_created_short_links(1);
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    perform public.increment_deleted_short_links(1);
+    return old;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists short_links_stats_insert_trigger on public.short_links;
+create trigger short_links_stats_insert_trigger
+after insert on public.short_links
+for each row execute function public.sync_short_link_stats();
+
+drop trigger if exists short_links_stats_delete_trigger on public.short_links;
+create trigger short_links_stats_delete_trigger
+after delete on public.short_links
+for each row execute function public.sync_short_link_stats();
+
+-- RPC는 앱 서버의 service_role만 호출합니다.
+revoke execute on function public.increment_click_count(bigint) from public, anon, authenticated;
+revoke execute on function public.record_short_link_visit(bigint, text, text) from public, anon, authenticated;
+revoke execute on function public.delete_expired_short_links() from public, anon, authenticated;
+revoke execute on function public.increment_deleted_short_links(integer) from public, anon, authenticated;
+revoke execute on function public.increment_created_short_links(integer) from public, anon, authenticated;
+revoke execute on function public.consume_short_link_rate_limit(text) from public, anon, authenticated;
+revoke execute on function public.consume_page_visit_rate_limit(text) from public, anon, authenticated;
+revoke execute on function public.get_link_visit_stats(timestamptz, timestamptz, bigint) from public, anon, authenticated;
+revoke execute on function public.get_global_visit_stats(timestamptz, timestamptz) from public, anon, authenticated;
+revoke execute on function public.sync_short_link_stats() from public, anon, authenticated;
+
+grant execute on function public.increment_click_count(bigint) to service_role;
+grant execute on function public.record_short_link_visit(bigint, text, text) to service_role;
+grant execute on function public.delete_expired_short_links() to service_role;
+grant execute on function public.increment_deleted_short_links(integer) to service_role;
+grant execute on function public.increment_created_short_links(integer) to service_role;
+grant execute on function public.consume_short_link_rate_limit(text) to service_role;
+grant execute on function public.consume_page_visit_rate_limit(text) to service_role;
+grant execute on function public.get_link_visit_stats(timestamptz, timestamptz, bigint) to service_role;
+grant execute on function public.get_global_visit_stats(timestamptz, timestamptz) to service_role;
