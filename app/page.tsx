@@ -141,171 +141,61 @@ export default function HomePage() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isSystemPipActive, setIsSystemPipActive] = useState(false);
 
+  // AOT 전용 상태 (페이지 내 플로팅과 완전히 분리)
+  const [isAotModalOpen, setIsAotModalOpen] = useState(false);
+  const [aotModalUrl, setAotModalUrl] = useState<string | null>(null);
+
   const handleSystemAlwaysOnTop = async (url: string, slug: string) => {
     try {
-      // 1. Try Document Picture-in-Picture API (Chrome/Edge/Opera 116+)
       if (typeof window !== "undefined" && "documentPictureInPicture" in window) {
         const docPiP = (window as any).documentPictureInPicture;
-        
-        // Request always-on-top window
-        const pipWindow = await docPiP.requestWindow({
-          width: 250,
-          height: 310,
-        });
+        const pipWindow = await docPiP.requestWindow({ width: 260, height: 320 });
 
         setIsSystemPipActive(true);
-        setPinnedQrUrl(url);
-        setPinnedSlug(slug);
 
-        // Copy styles so it looks beautiful
-        const styleSheets = Array.from(document.styleSheets);
-        styleSheets.forEach((styleSheet) => {
+        // 스타일 복사
+        Array.from(document.styleSheets).forEach((styleSheet) => {
           try {
-            const cssRules = Array.from(styleSheet.cssRules)
-              .map((rule) => rule.cssText)
-              .join('');
-            const style = pipWindow.document.createElement('style');
+            const cssRules = Array.from(styleSheet.cssRules).map((r) => r.cssText).join("");
+            const style = pipWindow.document.createElement("style");
             style.textContent = cssRules;
             pipWindow.document.head.appendChild(style);
           } catch {
             if (styleSheet.href) {
-              const link = pipWindow.document.createElement('link');
-              link.rel = 'stylesheet';
+              const link = pipWindow.document.createElement("link");
+              link.rel = "stylesheet";
               link.href = styleSheet.href;
               pipWindow.document.head.appendChild(link);
             }
           }
         });
 
-        // Add custom styled wrapper
-        pipWindow.document.body.style.margin = "0";
-        pipWindow.document.body.style.padding = "0";
-        pipWindow.document.body.style.overflow = "hidden";
-        pipWindow.document.body.style.backgroundColor = "#F8FAFC"; // slate-50
+        pipWindow.document.body.style.cssText = "margin:0;padding:0;overflow:hidden;background:#F8FAFC;";
 
-        const container = pipWindow.document.createElement('div');
-        container.style.display = "flex";
-        container.style.flexDirection = "column";
-        container.style.alignItems = "center";
-        container.style.justifyContent = "center";
-        container.style.height = "100vh";
-        container.style.boxSizing = "border-box";
-        container.style.padding = "16px";
-        container.style.fontFamily = "'Pretendard', sans-serif";
-
-        const qrImgUrl = `/api/qr?size=320&margin=10&data=${encodeURIComponent(url)}`;
+        const qrImgUrl = `/api/qr?size=900&margin=10&data=${encodeURIComponent(url)}`;
         const shortLabel = url.replace(/^https?:\/\//, "");
 
+        const container = pipWindow.document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:16px;box-sizing:border-box;";
         container.innerHTML = `
-          <div style="
-            background: white;
-            border-radius: 16px;
-            padding: 12px;
-            box-shadow: 0 4px 16px rgba(79, 108, 251, 0.08);
-            border: 1px solid rgba(79, 108, 251, 0.12);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            height: 100%;
-            box-sizing: border-box;
-          ">
-            <div style="font-size: 11px; font-weight: 800; color: #4F46E5; letter-spacing: 1px; margin-bottom: 8px;">📌 샘링크 QR 고정</div>
-            <img src="${qrImgUrl}" style="width: 85%; height: auto; object-fit: contain; border-radius: 8px; margin-bottom: 8px;" />
-            <div style="font-size: 11px; font-weight: 900; color: #214ad8; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;">${shortLabel}</div>
+          <div style="background:white;border-radius:16px;padding:12px;box-shadow:0 4px 16px rgba(79,108,251,0.08);border:1px solid rgba(79,108,251,0.12);display:flex;flex-direction:column;align-items:center;width:100%;height:100%;box-sizing:border-box;gap:8px;">
+            <div style="font-size:11px;font-weight:800;color:#4F46E5;flex-shrink:0;">🖥️ 샘링크 AOT</div>
+            <div style="flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;">
+              <img src="${qrImgUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" />
+            </div>
+            <div style="font-size:11px;font-weight:900;color:#214ad8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;flex-shrink:0;">${shortLabel}</div>
           </div>
         `;
-
         pipWindow.document.body.appendChild(container);
 
-        // When closed, reset state
         pipWindow.addEventListener("pagehide", () => {
           setIsSystemPipActive(false);
-          setPinnedQrUrl(null);
-          setPinnedSlug(null);
         });
-
-        return;
+      } else {
+        alert("항상 위에 띄우기(창시스템 고정)은 Chrome 116+ 또는 Edge에서 지원됩니다.\n하단 플로팅 고정(페이지 내 고정) 기능을 이용해주세요.");
       }
-
-      // 2. Fallback to Canvas + Video Picture-in-Picture (Safari / Firefox / older browsers)
-      if (typeof document !== "undefined" && "pictureInPictureEnabled" in document && (document as any).pictureInPictureEnabled) {
-        setIsSystemPipActive(true);
-        setPinnedQrUrl(url);
-        setPinnedSlug(slug);
-
-        const qrImgUrl = `/api/qr?size=400&margin=15&data=${encodeURIComponent(url)}`;
-        const shortLabel = url.replace(/^https?:\/\//, "");
-
-        const img = new window.Image();
-        img.crossOrigin = "anonymous";
-        img.src = qrImgUrl;
-        img.onload = async () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = 400;
-          canvas.height = 460;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-
-          // Draw background with soft gradient
-          const grad = ctx.createLinearGradient(0, 0, 0, 460);
-          grad.addColorStop(0, "#F8FAFC");
-          grad.addColorStop(1, "#EFF6FF");
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, 400, 460);
-
-          // Draw white card for QR
-          ctx.fillStyle = "#FFFFFF";
-          ctx.beginPath();
-          ctx.roundRect ? ctx.roundRect(20, 20, 360, 360, 24) : ctx.rect(20, 20, 360, 360);
-          ctx.fill();
-          
-          // Draw thin border on card
-          ctx.strokeStyle = "rgba(79, 108, 251, 0.12)";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          // Center and draw the QR image
-          ctx.drawImage(img, 35, 35, 330, 330);
-
-          // Draw Title
-          ctx.fillStyle = "#4F46E5";
-          ctx.font = "bold 14px 'Pretendard', sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText("📌 샘링크 QR 고정 모드", 200, 410);
-
-          // Draw Short Link text below
-          ctx.fillStyle = "#1E293B";
-          ctx.font = "900 16px 'Pretendard', sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText(shortLabel, 200, 435);
-
-          // Setup hidden video
-          const video = document.createElement("video");
-          video.muted = true;
-          video.playsInline = true;
-          (video as any).srcObject = canvas.captureStream(10); // 10 FPS
-          
-          await video.play();
-          await video.requestPictureInPicture();
-
-          // Monitor PiP exit
-          video.addEventListener("leavepictureinpicture", () => {
-            setIsSystemPipActive(false);
-            setPinnedQrUrl(null);
-            setPinnedSlug(null);
-          });
-        };
-        return;
-      }
-
-      // 3. Browser doesn't support AOT, alert and use standard floating overlay
-      alert("이 브라우저에서는 시스템 화면 최상단 고정 기능이 직접 제공되지 않습니다. 대신 웹페이지 내 플로팅 고정 모드를 실행합니다.");
-      handlePinQr(url, slug);
     } catch (e) {
-      console.error(e);
-      // Fallback
-      handlePinQr(url, slug);
+      console.error("Document PiP 실패:", e);
     }
   };
 
@@ -383,7 +273,7 @@ export default function HomePage() {
   const selectedSavedUrl = selectedSavedLink
     ? selectedSavedLink.displayShortUrl ?? selectedSavedLink.shortUrl
     : "";
-  const visibleMyLinks = isMyLinksExpanded ? myLinks : myLinks.slice(0, 3);
+  const visibleMyLinks = isMyLinksExpanded ? myLinks : myLinks.slice(0, 1);
   const hiddenMyLinkCount = Math.max(myLinks.length - visibleMyLinks.length, 0);
 
   async function loadMyLinks() {
@@ -407,6 +297,15 @@ export default function HomePage() {
 
   useEffect(() => {
     document.title = PAGE_TITLE;
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/page-visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: "/" }),
+      keepalive: true,
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -760,6 +659,7 @@ export default function HomePage() {
               <span className="feature-brief-pill">단축 링크·QR 즉시 생성</span>
               <span className="feature-brief-pill">브라우저 기반 링크 보관</span>
               <span className="feature-brief-pill">링크별 방문 통계 확인</span>
+              <span className="feature-brief-pill">QR 코드 PiP 모드 지원</span>
             </div>
           </aside>
         </section>
@@ -903,7 +803,7 @@ export default function HomePage() {
                   </article>
                 );
               })}
-              {myLinks.length > 3 ? (
+              {myLinks.length > 1 ? (
                 <button
                   className="my-links-toggle"
                   type="button"
@@ -1258,7 +1158,7 @@ export default function HomePage() {
           </div>
           <div className="floating-qr-body">
             <img
-              src={`/api/qr?size=400&margin=10&data=${encodeURIComponent(pinnedQrUrl)}`}
+              src={`/api/qr?size=900&margin=10&data=${encodeURIComponent(pinnedQrUrl)}`}
               alt="화면에 고정된 QR 코드"
               className="floating-qr-img"
               draggable={false}

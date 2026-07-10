@@ -13,7 +13,7 @@ function pickClientIp(request: Request) {
 export function getRateLimitKey(request: Request) {
   const salt = process.env.RATE_LIMIT_SALT?.trim() || "samlink-rate-limit-v1";
   const ip = pickClientIp(request);
-  const userAgent = request.headers.get("user-agent")?.trim() || "unknown";
 
-  return createHash("sha256").update(`${ip}|${userAgent}|${salt}`).digest("hex");
+  // User-Agent를 키에 섞으면 UA만 바꿔 제한을 우회할 수 있으므로 IP만 사용합니다.
+  return createHash("sha256").update(`${ip}|${salt}`).digest("hex");
 }

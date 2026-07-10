@@ -192,8 +192,8 @@ textarea {
 }
 
 .feature-brief-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, auto));
   gap: 8px;
   justify-content: flex-end;
 }
@@ -332,7 +332,11 @@ textarea {
 .saved-link-item-main strong {
   color: var(--brand-strong);
   font-size: 1rem;
-  word-break: break-all;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .saved-link-item-main span,
@@ -340,6 +344,14 @@ textarea {
   color: var(--muted);
   font-size: 0.84rem;
   line-height: 1.4;
+}
+
+.saved-link-item-main span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .saved-link-item-meta {
@@ -373,7 +385,10 @@ textarea {
   font-weight: 900;
   line-height: 1.35;
   text-decoration: none;
-  word-break: break-all;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .my-link-status {
@@ -402,7 +417,9 @@ textarea {
 }
 
 .my-link-destination {
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .my-links-toggle {
@@ -899,12 +916,16 @@ textarea {
   color: var(--muted);
 }
 
-.admin-footer-banner,
+.admin-stats-banner,
 .public-footer-banner {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 4px 0 0;
+}
+
+.admin-stats-banner .banner-note {
+  grid-column: 1 / -1;
 }
 
 .banner-card {
@@ -972,6 +993,14 @@ textarea {
 
 .saved-link-modal {
   justify-items: stretch;
+  overflow-x: hidden;
+}
+
+.saved-link-modal .result-meta,
+.saved-link-modal .saved-link-modal-url {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .saved-link-modal-url {
@@ -988,6 +1017,18 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.saved-link-qr-header .saved-link-actions {
+  justify-content: flex-end;
+}
+
+.saved-link-modal > .saved-link-actions {
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid rgba(79, 108, 251, 0.1);
+  margin-top: 4px;
 }
 
 .saved-link-qr-header strong {
@@ -1093,6 +1134,7 @@ textarea {
 
   .feature-brief-list {
     justify-content: flex-start;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .shell {
@@ -1166,7 +1208,7 @@ textarea {
     min-width: 760px;
   }
 
-  .admin-footer-banner,
+  .admin-stats-banner,
   .public-footer-banner {
     grid-template-columns: 1fr;
   }
@@ -1321,8 +1363,10 @@ textarea {
 }
 
 .floating-qr-img {
-  max-width: 90%;
-  max-height: 80%;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   border-radius: 12px;
   background: white;

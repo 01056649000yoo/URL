@@ -1,3 +1,5 @@
+import { randomInt } from "node:crypto";
+
 const ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
 const DEFAULT_SLUG_LENGTH = 4;
 
@@ -18,8 +20,7 @@ export function normalizeSlug(value: string) {
 export function generateSlug(length = DEFAULT_SLUG_LENGTH) {
   let output = "";
   for (let index = 0; index < length; index += 1) {
-    const randomIndex = Math.floor(Math.random() * ALPHABET.length);
-    output += ALPHABET[randomIndex];
+    output += ALPHABET[randomInt(ALPHABET.length)];
   }
   return output;
 }

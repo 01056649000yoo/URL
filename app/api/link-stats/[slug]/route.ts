@@ -7,6 +7,12 @@ type RouteContext = {
   }>;
 };
 
+type LinkVisitStats = {
+  link_id: number;
+  recent_visitors: number;
+  today_visitors: number;
+};
+
 export async function GET(_: Request, context: RouteContext) {
   try {
     const { slug } = await context.params;
@@ -27,36 +33,21 @@ export async function GET(_: Request, context: RouteContext) {
       return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
     }
 
-    const [recentVisitsResult, todayVisitsResult] = await Promise.all([
-      admin
-        .from("short_link_visits")
-        .select("visitor_hash")
-        .eq("link_id", link.id)
-        .gte("visited_at", recentThresholdIso),
-      admin
-        .from("short_link_visits")
-        .select("visitor_hash")
-        .eq("link_id", link.id)
-        .gte("visited_at", todayThresholdIso),
-    ]);
+    const { data: visitStatsData } = await admin.rpc("get_link_visit_stats", {
+      p_recent_after: recentThresholdIso,
+      p_today_after: todayThresholdIso,
+      p_link_id: link.id,
+    });
 
-    const recentVisitors = new Set(
-      (recentVisitsResult.data ?? [])
-        .map((visit) => visit.visitor_hash)
-        .filter((value): value is string => Boolean(value)),
-    ).size;
-
-    const todayVisitors = new Set(
-      (todayVisitsResult.data ?? [])
-        .map((visit) => visit.visitor_hash)
-        .filter((value): value is string => Boolean(value)),
-    ).size;
+    const visitStats = (
+      Array.isArray(visitStatsData) ? visitStatsData[0] : visitStatsData
+    ) as LinkVisitStats | null | undefined;
 
     return NextResponse.json({
       slug: link.slug,
       clickCount: link.click_count,
-      recentVisitors,
-      todayVisitors,
+      recentVisitors: visitStats?.recent_visitors ?? 0,
+      todayVisitors: visitStats?.today_visitors ?? 0,
       isActive: link.is_active,
       expiresAt: link.expires_at,
     });

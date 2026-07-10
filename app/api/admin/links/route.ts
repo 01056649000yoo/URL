@@ -2,6 +2,17 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/lib/auth/admin";
 
+type LinkVisitStats = {
+  link_id: number;
+  recent_visitors: number;
+  today_visitors: number;
+};
+
+type GlobalVisitStats = {
+  recent_visitors: number;
+  today_visitors: number;
+};
+
 export async function GET(request: Request) {
   try {
     await requireAdminUser(request);
@@ -10,10 +21,17 @@ export async function GET(request: Request) {
     const todayUtc = new Date().toISOString().slice(0, 10);
     const recentThresholdIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const todayThresholdIso = new Date(`${todayUtc}T00:00:00.000Z`).toISOString();
+    const sevenDaysAgoUtc = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const thirtyDaysAgoUtc = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     const { data, error } = await admin
       .from("short_links")
       .select("id, slug, destination, created_by, expires_at, click_count, is_active, created_at")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(1000);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -23,8 +41,11 @@ export async function GET(request: Request) {
     let createdCount = 0;
     let todayCreated = 0;
     let todayDeleted = 0;
+    let weekCreated = 0;
+    let monthCreated = 0;
     let recentVisitors = 0;
     let todayVisitors = 0;
+    let todayPageVisitors = 0;
     let alerts = [] as Array<{
       alert_key: string;
       kind: string;
@@ -33,8 +54,15 @@ export async function GET(request: Request) {
       created_at: string;
     }>;
     try {
-      const [statsResult, dailyResult, alertsResult, recentVisitsResult, todayVisitsResult] =
-        await Promise.all([
+      const [
+        statsResult,
+        dailyResult,
+        alertsResult,
+        linkVisitStatsResult,
+        globalVisitStatsResult,
+        periodDailyResult,
+        todayPageVisitsResult,
+      ] = await Promise.all([
         admin
           .from("short_link_stats")
           .select("total_created, total_deleted")
@@ -50,51 +78,59 @@ export async function GET(request: Request) {
           .select("alert_key, kind, title, message, created_at")
           .order("created_at", { ascending: false })
           .limit(3),
+        admin.rpc("get_link_visit_stats", {
+          p_recent_after: recentThresholdIso,
+          p_today_after: todayThresholdIso,
+        }),
+        admin.rpc("get_global_visit_stats", {
+          p_recent_after: recentThresholdIso,
+          p_today_after: todayThresholdIso,
+        }),
         admin
-          .from("short_link_visits")
-          .select("link_id, visitor_hash")
-          .gte("visited_at", recentThresholdIso),
+          .from("short_link_daily_stats")
+          .select("day, created_count")
+          .gte("day", thirtyDaysAgoUtc),
         admin
-          .from("short_link_visits")
-          .select("link_id, visitor_hash")
-          .gte("visited_at", todayThresholdIso),
+          .from("page_visits")
+          .select("visitor_hash", { count: "exact", head: true })
+          .eq("day_utc", todayUtc)
+          .eq("path", "/"),
       ]);
 
-      const recentVisitorsByLink = new Map<number, Set<string>>();
-      const todayVisitorsByLink = new Map<number, Set<string>>();
-      const globalRecentVisitors = new Set<string>();
-
-      for (const visit of recentVisitsResult.data ?? []) {
-        if (typeof visit.link_id !== "number" || !visit.visitor_hash) continue;
-        globalRecentVisitors.add(visit.visitor_hash);
-        const current = recentVisitorsByLink.get(visit.link_id) ?? new Set<string>();
-        current.add(visit.visitor_hash);
-        recentVisitorsByLink.set(visit.link_id, current);
+      const visitStatsByLink = new Map<number, LinkVisitStats>();
+      for (const row of (linkVisitStatsResult.data ?? []) as LinkVisitStats[]) {
+        if (typeof row.link_id !== "number") continue;
+        visitStatsByLink.set(row.link_id, row);
       }
 
-      for (const visit of todayVisitsResult.data ?? []) {
-        if (typeof visit.link_id !== "number" || !visit.visitor_hash) continue;
-        const current = todayVisitorsByLink.get(visit.link_id) ?? new Set<string>();
-        current.add(visit.visitor_hash);
-        todayVisitorsByLink.set(visit.link_id, current);
-      }
+      const globalStats = (
+        Array.isArray(globalVisitStatsResult.data)
+          ? globalVisitStatsResult.data[0]
+          : globalVisitStatsResult.data
+      ) as GlobalVisitStats | null | undefined;
 
       createdCount = statsResult.data?.total_created ?? 0;
       deletedCount = statsResult.data?.total_deleted ?? 0;
       todayCreated = dailyResult.data?.created_count ?? 0;
       todayDeleted = dailyResult.data?.deleted_count ?? 0;
-      recentVisitors = globalRecentVisitors.size;
-      todayVisitors = new Set(
-        (todayVisitsResult.data ?? [])
-          .map((visit) => visit.visitor_hash)
-          .filter((value): value is string => Boolean(value)),
-      ).size;
+      recentVisitors = globalStats?.recent_visitors ?? 0;
+      todayVisitors = globalStats?.today_visitors ?? 0;
+
+      for (const row of periodDailyResult.data ?? []) {
+        const count = typeof row.created_count === "number" ? row.created_count : 0;
+        if (typeof row.day === "string" && row.day >= sevenDaysAgoUtc) {
+          weekCreated += count;
+        }
+        monthCreated += count;
+      }
+
+      todayPageVisitors = todayPageVisitsResult.count ?? 0;
       alerts = alertsResult.data ?? [];
 
       const linksWithTraffic = (data ?? []).map((link) => ({
         ...link,
-        recent_visitors_5m: recentVisitorsByLink.get(link.id)?.size ?? 0,
-        today_visitors: todayVisitorsByLink.get(link.id)?.size ?? 0,
+        recent_visitors_5m: visitStatsByLink.get(link.id)?.recent_visitors ?? 0,
+        today_visitors: visitStatsByLink.get(link.id)?.today_visitors ?? 0,
       }));
 
       return NextResponse.json({
@@ -102,9 +138,12 @@ export async function GET(request: Request) {
         createdCount,
         todayCreated,
         todayDeleted,
+        weekCreated,
+        monthCreated,
         deletedCount,
         recentVisitors,
         todayVisitors,
+        todayPageVisitors,
         alerts,
       });
     } catch {
@@ -112,8 +151,11 @@ export async function GET(request: Request) {
       deletedCount = 0;
       todayCreated = 0;
       todayDeleted = 0;
+      weekCreated = 0;
+      monthCreated = 0;
       recentVisitors = 0;
       todayVisitors = 0;
+      todayPageVisitors = 0;
       alerts = [];
     }
 
@@ -122,9 +164,12 @@ export async function GET(request: Request) {
       createdCount,
       todayCreated,
       todayDeleted,
+      weekCreated,
+      monthCreated,
       deletedCount,
       recentVisitors,
       todayVisitors,
+      todayPageVisitors,
       alerts,
     });
   } catch (error) {

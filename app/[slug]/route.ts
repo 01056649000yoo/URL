@@ -6,6 +6,7 @@ import {
   getVisitorCookieMaxAge,
   getVisitorCookieName,
 } from "@/lib/visitor";
+import { useSecureCookies } from "@/lib/site-url";
 
 type RouteContext = {
   params: Promise<{
@@ -32,7 +33,14 @@ export async function GET(request: Request, context: RouteContext) {
   const isExpired = expiresAt !== null && expiresAt <= Date.now();
 
   if (!data.is_active || isExpired) {
-    await admin.from("short_links").delete().eq("id", data.id);
+    const { data: deleted } = await admin
+      .from("short_links")
+      .delete()
+      .eq("id", data.id)
+      .select("id");
+    if (deleted?.length) {
+      await admin.rpc("increment_deleted_short_links", { amount: deleted.length });
+    }
     return NextResponse.json({ error: "링크가 만료되었습니다." }, { status: 404 });
   }
 
@@ -55,7 +63,7 @@ export async function GET(request: Request, context: RouteContext) {
       value: visitor.visitorId,
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: useSecureCookies(),
       path: "/",
       maxAge: getVisitorCookieMaxAge(),
     });

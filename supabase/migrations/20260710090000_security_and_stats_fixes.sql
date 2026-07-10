@@ -1,111 +1,8 @@
-create table if not exists public.short_links (
-  id bigint generated always as identity primary key,
-  slug text not null unique,
-  destination text not null,
-  created_by text,
-  expires_at timestamptz,
-  click_count integer not null default 0,
-  is_active boolean not null default true,
-  created_at timestamptz not null default timezone('utc', now())
-);
-
-alter table public.short_links
-add column if not exists expires_at timestamptz;
-
-create index if not exists short_links_expires_at_idx
-on public.short_links (expires_at);
-
-create table if not exists public.short_link_stats (
-  key text primary key,
-  total_created integer not null default 0,
-  total_deleted integer not null default 0
-);
-
-alter table public.short_link_stats enable row level security;
-
-alter table public.short_link_stats
-add column if not exists total_created integer not null default 0;
-
-insert into public.short_link_stats (key, total_created, total_deleted)
-values ('global', 0, 0)
-on conflict (key) do nothing;
-
-create table if not exists public.short_link_rate_limits (
-  ip_hash text not null,
-  bucket text not null,
-  window_start timestamptz not null,
-  request_count integer not null default 0,
-  primary key (ip_hash, bucket, window_start)
-);
-
-create index if not exists short_link_rate_limits_window_start_idx
-on public.short_link_rate_limits (window_start);
-
-alter table public.short_link_rate_limits enable row level security;
-
-create table if not exists public.short_link_daily_stats (
-  day date primary key,
-  created_count integer not null default 0,
-  deleted_count integer not null default 0,
-  updated_at timestamptz not null default timezone('utc', now())
-);
-
-alter table public.short_link_daily_stats enable row level security;
-
-create table if not exists public.short_link_visits (
-  id bigint generated always as identity primary key,
-  link_id bigint not null references public.short_links (id) on delete cascade,
-  visitor_hash text not null,
-  referrer text,
-  visited_at timestamptz not null default timezone('utc', now())
-);
-
-create index if not exists short_link_visits_link_id_visited_at_idx
-on public.short_link_visits (link_id, visited_at desc);
-
-create index if not exists short_link_visits_visited_at_idx
-on public.short_link_visits (visited_at desc);
-
-alter table public.short_link_visits enable row level security;
-
-create table if not exists public.short_link_notifications (
-  alert_key text primary key,
-  kind text not null,
-  title text not null,
-  message text not null,
-  created_at timestamptz not null default timezone('utc', now())
-);
-
-alter table public.short_link_notifications enable row level security;
-
-create table if not exists public.page_visits (
-  id bigint generated always as identity primary key,
-  visitor_hash text not null,
-  path text not null default '/',
-  day_utc date not null,
-  visited_at timestamptz not null default timezone('utc', now())
-);
-
-create unique index if not exists page_visits_unique_daily_visitor_idx
-  on public.page_visits (visitor_hash, path, day_utc);
-
-create index if not exists page_visits_visited_at_idx
-  on public.page_visits (visited_at desc);
-
-create index if not exists page_visits_day_utc_idx
-  on public.page_visits (day_utc desc);
-
-alter table public.page_visits enable row level security;
-
-alter table public.short_links enable row level security;
-
-drop policy if exists "allow public read active short links" on public.short_links;
-
-create policy "allow public read active short links"
-on public.short_links
-for select
-to anon
-using (is_active = true);
+-- 보안·통계 정확성 개선 마이그레이션
+-- 1) 모든 security definer 함수에 search_path 고정 (search-path 하이재킹 방지)
+-- 2) 방문 통계 집계 RPC 추가 (PostgREST 1,000행 제한 우회)
+-- 3) 오래된 방문 기록·rate limit 행 정리를 시간당 cleanup으로 이동
+-- 4) 페이지 방문 기록용 rate limit RPC 추가
 
 create or replace function public.increment_click_count(link_id bigint)
 returns void
@@ -232,8 +129,6 @@ begin
 end;
 $$;
 
-drop function if exists public.consume_short_link_rate_limit(text);
-
 create or replace function public.consume_short_link_rate_limit(p_ip_hash text)
 returns table (
   allowed boolean,
@@ -327,13 +222,6 @@ begin
   return new;
 end;
 $$;
-
-drop trigger if exists short_links_capacity_trigger on public.short_links;
-
-create trigger short_links_capacity_trigger
-before insert on public.short_links
-for each row
-execute function public.enforce_short_link_capacity();
 
 -- 페이지 방문 기록용 rate limit (IP당 분당 30회)
 create or replace function public.consume_page_visit_rate_limit(p_ip_hash text)

@@ -20,9 +20,12 @@ type LinksResponse = {
   createdCount?: number;
   todayCreated?: number;
   todayDeleted?: number;
+  weekCreated?: number;
+  monthCreated?: number;
   deletedCount?: number;
   recentVisitors?: number;
   todayVisitors?: number;
+  todayPageVisitors?: number;
   alerts?: AdminAlert[];
   error?: string;
 };
@@ -110,6 +113,9 @@ export default function AdminPage() {
   const [deletedCount, setDeletedCount] = useState(0);
   const [recentVisitors, setRecentVisitors] = useState(0);
   const [todayVisitors, setTodayVisitors] = useState(0);
+  const [todayPageVisitors, setTodayPageVisitors] = useState(0);
+  const [weekCreated, setWeekCreated] = useState(0);
+  const [monthCreated, setMonthCreated] = useState(0);
   const [alerts, setAlerts] = useState<AdminAlert[]>([]);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -153,6 +159,9 @@ export default function AdminPage() {
       setDeletedCount(0);
       setRecentVisitors(0);
       setTodayVisitors(0);
+      setTodayPageVisitors(0);
+      setWeekCreated(0);
+      setMonthCreated(0);
       setAlerts([]);
       return;
     }
@@ -197,6 +206,9 @@ export default function AdminPage() {
       setDeletedCount(data.deletedCount ?? 0);
       setRecentVisitors(data.recentVisitors ?? 0);
       setTodayVisitors(data.todayVisitors ?? 0);
+      setTodayPageVisitors(data.todayPageVisitors ?? 0);
+      setWeekCreated(data.weekCreated ?? 0);
+      setMonthCreated(data.monthCreated ?? 0);
       setAlerts(data.alerts ?? []);
       setSelectedIds([]);
     } catch (caught) {
@@ -327,7 +339,12 @@ export default function AdminPage() {
     setAuthError("");
 
     try {
-      const response = await fetch("/api/cleanup-expired", { method: "POST" });
+      const response = await fetch("/api/cleanup-expired", {
+        method: "POST",
+        headers: session?.accessToken
+          ? { Authorization: `Bearer ${session.accessToken}` }
+          : undefined,
+      });
       const data = (await response.json()) as { error?: string; deleted?: number };
       if (!response.ok) {
         throw new Error(data.error ?? "만료 링크 정리에 실패했습니다.");
@@ -500,34 +517,79 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="admin-summary">
-          <div className="summary-card">
+        <div className="admin-stats-banner">
+          <div className="banner-card">
+            <span className="banner-label">전체</span>
             <strong>{links.length}</strong>
-            <span>전체</span>
+            <span className="banner-subtext">현재 DB 보관 건수</span>
           </div>
-          <div className="summary-card">
-            <strong>{activeCount}</strong>
-            <span>활성</span>
+          <div className="banner-card">
+            <span className="banner-label">활성 링크 수</span>
+            <strong>{liveCount}</strong>
+            <span className="banner-subtext">활성 + 미만료</span>
           </div>
-          <div className="summary-card">
+          <div className="banner-card">
+            <span className="banner-label">누적 생성 주소</span>
+            <strong>{createdCount}</strong>
+            <span className="banner-subtext">삭제된 주소까지 포함</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">오늘 생성</span>
             <strong>{todayCreated}</strong>
-            <span>오늘 생성</span>
+            <span className="banner-subtext">오늘 기준</span>
           </div>
-          <div className="summary-card">
+          <div className="banner-card">
+            <span className="banner-label">최근 7일 생성</span>
+            <strong>{weekCreated}</strong>
+            <span className="banner-subtext">오늘 포함 7일</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">최근 30일 생성</span>
+            <strong>{monthCreated}</strong>
+            <span className="banner-subtext">오늘 포함 30일</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">오늘 페이지 접속자</span>
+            <strong>{todayPageVisitors}</strong>
+            <span className="banner-subtext">메인 페이지 유니크 방문</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">오늘 링크 방문자</span>
+            <strong>{todayVisitors}</strong>
+            <span className="banner-subtext">단축링크 리다이렉트</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">최근 5분 접속</span>
             <strong>{recentVisitors}</strong>
-            <span>최근 5분 접속</span>
+            <span className="banner-subtext">실시간 추정</span>
           </div>
-          <div className="summary-card">
+          <div className="banner-card">
+            <span className="banner-label">만료 예정</span>
             <strong>{expiringCount}</strong>
-            <span>만료 예정</span>
+            <span className="banner-subtext">아직 유효</span>
           </div>
-          <div className="summary-card">
+          <div className="banner-card">
+            <span className="banner-label">만료됨</span>
             <strong>{expiredCount}</strong>
-            <span>만료됨</span>
+            <span className="banner-subtext">정리 대상</span>
           </div>
-          <div className="summary-card">
+          <div className="banner-card">
+            <span className="banner-label">오늘 삭제</span>
+            <strong>{todayDeleted}</strong>
+            <span className="banner-subtext">오늘 기준</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">자동 삭제됨</span>
+            <strong>{deletedCount}</strong>
+            <span className="banner-subtext">누적 삭제 수</span>
+          </div>
+          <div className="banner-card">
+            <span className="banner-label">선택됨</span>
             <strong>{selectedIds.length}</strong>
-            <span>선택됨</span>
+            <span className="banner-subtext">현재 체크된 행</span>
+          </div>
+          <div className="banner-note">
+            페이지 접속자는 메인 페이지 방문자 수, 링크 방문자는 단축링크 클릭 리다이렉트 기준이며, 모두 유니크 방문자 기준입니다. 30초마다 자동 갱신됩니다.
           </div>
         </div>
 
@@ -662,41 +724,6 @@ export default function AdminPage() {
           </table>
         </div>
 
-        <div className="admin-footer-banner">
-          <div className="banner-card">
-            <span className="banner-label">누적 생성 주소</span>
-            <strong>{createdCount}</strong>
-            <span className="banner-subtext">삭제된 주소까지 포함</span>
-          </div>
-          <div className="banner-card">
-            <span className="banner-label">활성 링크 수</span>
-            <strong>{liveCount}</strong>
-            <span className="banner-subtext">활성 링크 기준</span>
-          </div>
-          <div className="banner-card">
-            <span className="banner-label">오늘 생성 수</span>
-            <strong>{todayCreated}</strong>
-            <span className="banner-subtext">오늘 기준</span>
-          </div>
-          <div className="banner-card">
-            <span className="banner-label">오늘 삭제 수</span>
-            <strong>{todayDeleted}</strong>
-            <span className="banner-subtext">오늘 기준</span>
-          </div>
-          <div className="banner-card">
-            <span className="banner-label">오늘 방문자 수</span>
-            <strong>{todayVisitors}</strong>
-            <span className="banner-subtext">유니크 방문자 기준</span>
-          </div>
-          <div className="banner-card">
-            <span className="banner-label">자동 삭제됨</span>
-            <strong>{deletedCount}</strong>
-            <span className="banner-subtext">누적 삭제 수</span>
-          </div>
-          <div className="banner-note">
-            최근 5분 접속과 오늘 방문은 유니크 방문자 수 기준이며, 관리 화면은 30초마다 자동 갱신됩니다.
-          </div>
-        </div>
       </section>
     </main>
   );

@@ -65,13 +65,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.SHORTENER_ADMIN_TOKEN) {
-      return NextResponse.json(
-        { error: "서버에 관리자 토큰이 설정되지 않았습니다." },
-        { status: 500 },
-      );
-    }
-
     if (!retentionDays) {
       return NextResponse.json(
         { error: "유지 기간은 1일, 1주일, 1개월, 3달 중 하나를 선택해 주세요." },
@@ -124,26 +117,49 @@ export async function POST(request: NextRequest) {
 
     const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data, error } = await admin
-      .from("short_links")
-      .insert({
-        slug,
-        destination: parsedUrl.toString(),
-        created_by: createdBy,
-        expires_at: expiresAt,
-      })
-      .select("slug, destination, expires_at")
-      .single();
+    // 자동 생성 슬러그는 충돌 시 재시도하고, 반복 충돌하면 길이를 늘려 확률을 낮춥니다.
+    const maxAttempts = suppliedSlug ? 1 : 5;
+    let data: { slug: string; destination: string; expires_at: string | null } | null = null;
 
-    if (error) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const { data: inserted, error } = await admin
+        .from("short_links")
+        .insert({
+          slug,
+          destination: parsedUrl.toString(),
+          created_by: createdBy,
+          expires_at: expiresAt,
+        })
+        .select("slug, destination, expires_at")
+        .single();
+
+      if (!error) {
+        data = inserted;
+        break;
+      }
+
       const duplicate = error.code === "23505";
+      if (!duplicate) {
+        return NextResponse.json(
+          { error: `단축 링크를 저장하지 못했습니다. ${error.message}` },
+          { status: 500 },
+        );
+      }
+
+      if (suppliedSlug) {
+        return NextResponse.json(
+          { error: "이미 사용 중인 짧은 주소입니다. 다른 이름을 입력해 주세요." },
+          { status: 409 },
+        );
+      }
+
+      slug = generateSlug(attempt < 2 ? undefined : 6);
+    }
+
+    if (!data) {
       return NextResponse.json(
-        {
-          error: duplicate
-            ? "이미 사용 중인 짧은 주소입니다. 다른 이름을 입력해 주세요."
-            : `단축 링크를 저장하지 못했습니다. ${error.message}`,
-        },
-        { status: duplicate ? 409 : 500 },
+        { error: "짧은 주소 생성에 실패했습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 500 },
       );
     }
 

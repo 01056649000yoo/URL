@@ -3,10 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     container_name: samlink-app
     env_file:
       - .env.local
@@ -22,12 +18,15 @@ services:
     environment:
       CLEANUP_URL: http://app:3000/api/cleanup-expired
       CLEANUP_INTERVAL_SECONDS: "3600"
+      CLEANUP_TOKEN: "${SHORTENER_ADMIN_TOKEN}"
     command:
       - sh
       - -c
       - |
         while true; do
-          curl --fail --silent --show-error -X POST "$$CLEANUP_URL" || true
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer $$CLEANUP_TOKEN" \
+            "$$CLEANUP_URL" || true
           sleep "$$CLEANUP_INTERVAL_SECONDS"
         done
     restart: unless-stopped

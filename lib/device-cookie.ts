@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
+import { useSecureCookies } from "@/lib/site-url";
 
 export const DEVICE_COOKIE_NAME = "samlink_device_id";
 
@@ -29,7 +30,7 @@ export function setDeviceCookie(response: NextResponse, deviceId: string) {
   response.cookies.set(DEVICE_COOKIE_NAME, deviceId, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: useSecureCookies(),
     path: "/",
     maxAge: COOKIE_MAX_AGE_SECONDS,
   });
