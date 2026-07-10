@@ -61,6 +61,7 @@ const PAGE_TITLE = "샘링크 | 수업링크를 짧고 간편하게, QR코드로
 
 type SavedLink = CreateResult & {
   savedAt: string;
+  label?: string;
 };
 
 type SavedLinkStats = {
@@ -87,6 +88,125 @@ function isExpired(value?: string | null) {
   if (!value) return false;
   const time = new Date(value).getTime();
   return Number.isFinite(time) && time <= Date.now();
+}
+
+// 만료 7일 전부터 D-day 배지를 보여줍니다 (3일 이하는 강조).
+function getExpiryBadge(value?: string | null): { text: string; urgent: boolean } | null {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return null;
+
+  const remaining = time - Date.now();
+  if (remaining <= 0) return { text: "만료됨", urgent: true };
+
+  const days = Math.ceil(remaining / (24 * 60 * 60 * 1000));
+  if (days > 7) return null;
+  return { text: days <= 1 ? "오늘 만료" : `D-${days}`, urgent: days <= 3 };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// 제목 + QR + 짧은 주소가 들어간 A4 인쇄용 창을 엽니다. 제목은 인쇄 전 클릭해서 바로 고칠 수 있습니다.
+function openQrPrintView(url: string, title: string, slug: string) {
+  const printWindow = window.open("", "_blank", "width=820,height=1000");
+  if (!printWindow) {
+    alert("팝업이 차단되어 인쇄 창을 열 수 없습니다. 팝업 허용 후 다시 시도해 주세요.");
+    return;
+  }
+
+  const qrSrc = `${window.location.origin}/api/qr?size=1200&margin=20&data=${encodeURIComponent(url)}`;
+  const displayUrl = url.replace(/^https?:\/\//, "");
+  const safeTitle = escapeHtml(title.trim() || "QR 코드를 스캔해 주세요");
+
+  printWindow.document.write(`<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>샘링크 QR 인쇄 - ${escapeHtml(slug)}</title>
+<style>
+  @page { size: A4 portrait; margin: 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  .toolbar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 14px;
+    background: #eef2ff;
+    border-bottom: 1px solid #c7d2fe;
+  }
+  .toolbar button {
+    font-size: 16px;
+    font-weight: 700;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 10px;
+    background: #4f46e5;
+    color: white;
+    cursor: pointer;
+  }
+  .toolbar span { font-size: 13px; color: #4338ca; }
+  .sheet {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    padding: 40px 24px;
+    text-align: center;
+  }
+  h1 {
+    font-size: 44px;
+    font-weight: 900;
+    margin: 0;
+    max-width: 90%;
+    line-height: 1.25;
+    word-break: keep-all;
+    outline-color: #4f46e5;
+  }
+  img { width: 62%; max-width: 480px; height: auto; }
+  .short-url { font-size: 30px; font-weight: 800; color: #214ad8; margin: 0; word-break: break-all; }
+  .brand { font-size: 14px; color: #64748b; margin: 0; }
+  @media print {
+    body { background: white; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button type="button" onclick="window.print()">🖨️ 인쇄하기</button>
+    <span>제목을 클릭하면 인쇄 전에 바로 수정할 수 있어요</span>
+  </div>
+  <div class="sheet">
+    <h1 contenteditable="true" spellcheck="false">${safeTitle}</h1>
+    <img src="${qrSrc}" alt="QR 코드" />
+    <p class="short-url">${escapeHtml(displayUrl)}</p>
+    <p class="brand">샘링크 · ${escapeHtml(BRAND_DOMAIN)}</p>
+  </div>
+</body>
+</html>`);
+  printWindow.document.close();
 }
 
 function readSavedLinks() {
@@ -120,6 +240,10 @@ export default function HomePage() {
     todayVisitors: 0,
   });
   const [savedLinkStats, setSavedLinkStats] = useState<Record<string, SavedLinkStats>>({});
+  const [isEditingLabel, setIsEditingLabel] = useState(false);
+  const [labelDraft, setLabelDraft] = useState("");
+  const [isExtending, setIsExtending] = useState(false);
+  const [extendNotice, setExtendNotice] = useState("");
   const [myLinks, setMyLinks] = useState<MyLink[]>([]);
   const [isLoadingMyLinks, setIsLoadingMyLinks] = useState(false);
   const [isMyLinksExpanded, setIsMyLinksExpanded] = useState(false);
@@ -620,6 +744,63 @@ export default function HomePage() {
     }
   }
 
+  function openSavedLink(slug: string) {
+    setSelectedSavedSlug(slug);
+    setIsEditingLabel(false);
+    setLabelDraft("");
+    setExtendNotice("");
+  }
+
+  function saveLabel(slug: string) {
+    const label = labelDraft.trim().slice(0, 40);
+    const updated = savedLinks.map((link) =>
+      link.slug === slug ? { ...link, label: label || undefined } : link,
+    );
+    setSavedLinks(updated);
+    writeSavedLinks(updated);
+    setIsEditingLabel(false);
+  }
+
+  async function extendSavedLink(slug: string) {
+    setIsExtending(true);
+    setExtendNotice("");
+
+    try {
+      const response = await fetch("/api/my-links/extend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      });
+      const data = (await response.json()) as { expiresAt?: string; error?: string };
+
+      if (!response.ok || !data.expiresAt) {
+        throw new Error(data.error ?? "만료 기간을 연장하지 못했습니다.");
+      }
+
+      const newExpiresAt = data.expiresAt;
+      const updated = savedLinks.map((link) =>
+        link.slug === slug ? { ...link, expiresAt: newExpiresAt } : link,
+      );
+      setSavedLinks(updated);
+      writeSavedLinks(updated);
+      setSavedLinkStats((current) =>
+        current[slug] ? { ...current, [slug]: { ...current[slug], expiresAt: newExpiresAt } } : current,
+      );
+      if (result?.slug === slug) {
+        const nextResult = { ...result, expiresAt: newExpiresAt };
+        setResult(nextResult);
+        window.localStorage.setItem(LAST_RESULT_KEY, JSON.stringify(nextResult));
+      }
+      setExtendNotice(`만료가 ${formatDateTime(newExpiresAt)}(으)로 연장되었습니다.`);
+      void loadMyLinks();
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "만료 기간을 연장하지 못했습니다.";
+      setExtendNotice(message);
+    } finally {
+      setIsExtending(false);
+    }
+  }
+
   function removeSavedLink(slug: string) {
     const confirmed = window.confirm("이 링크를 내 목록에서 삭제할까요?");
     if (!confirmed) return;
@@ -743,6 +924,18 @@ export default function HomePage() {
                 >
                   📌 페이지 내 플로팅 고정
                 </button>
+                <button
+                  className="qr-action-btn pin-btn"
+                  type="button"
+                  onClick={() => {
+                    const saved = savedLinks.find((link) => link.slug === result.slug);
+                    openQrPrintView(resultUrl, saved?.label ?? "", result.slug);
+                  }}
+                  title="제목과 QR 코드, 짧은 주소가 함께 들어간 A4 인쇄용 화면을 엽니다."
+                  style={{ flex: "1 1 140px", backgroundColor: "rgba(16, 185, 129, 0.06)", color: "#0f766e" }}
+                >
+                  🖨️ 인쇄용 QR
+                </button>
               </div>
 
               {result.expiresAt ? (
@@ -784,6 +977,7 @@ export default function HomePage() {
                 const shortUrl = link.displayShortUrl ?? link.shortUrl;
                 const isExpired = link.expiresAt ? new Date(link.expiresAt).getTime() <= Date.now() : false;
                 const statusLabel = !link.isActive ? "비활성" : isExpired ? "만료됨" : "사용 가능";
+                const expiryBadge = link.isActive && !isExpired ? getExpiryBadge(link.expiresAt) : null;
 
                 return (
                   <article className="my-link-item" key={link.slug}>
@@ -794,6 +988,11 @@ export default function HomePage() {
                       <span className={link.isActive && !isExpired ? "my-link-status active" : "my-link-status"}>
                         {statusLabel}
                       </span>
+                      {expiryBadge ? (
+                        <span className={expiryBadge.urgent ? "expiry-badge urgent" : "expiry-badge"}>
+                          ⏳ {expiryBadge.text}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="my-link-destination">{link.destination}</p>
                     <p className="my-link-meta">
@@ -831,19 +1030,26 @@ export default function HomePage() {
               {savedLinks.map((link) => {
                 const linkUrl = link.displayShortUrl ?? link.shortUrl;
                 const statsForLink = savedLinkStats[link.slug];
+                const expiryBadge = getExpiryBadge(statsForLink?.expiresAt ?? link.expiresAt);
 
                 return (
                   <button
                     className="saved-link-item"
                     type="button"
                     key={link.slug}
-                    onClick={() => setSelectedSavedSlug(link.slug)}
+                    onClick={() => openSavedLink(link.slug)}
                   >
                     <div className="saved-link-item-main">
+                      {link.label ? <span className="saved-link-label">{link.label}</span> : null}
                       <strong>{linkUrl}</strong>
                       <span>{link.destination}</span>
                     </div>
                     <div className="saved-link-item-meta">
+                      {expiryBadge ? (
+                        <span className={expiryBadge.urgent ? "expiry-badge urgent" : "expiry-badge"}>
+                          ⏳ {expiryBadge.text}
+                        </span>
+                      ) : null}
                       <span>클릭 {statsForLink?.clickCount ?? 0}</span>
                       <span>최근 5분 {statsForLink?.recentVisitors ?? 0}</span>
                     </div>
@@ -966,6 +1172,45 @@ export default function HomePage() {
               닫기
             </button>
             <p className="qr-modal-title">저장된 링크 정보</p>
+            {isEditingLabel ? (
+              <div className="label-edit-row">
+                <input
+                  className="field label-edit-input"
+                  type="text"
+                  value={labelDraft}
+                  maxLength={40}
+                  placeholder="예: 3반 수학 설문"
+                  autoFocus
+                  onChange={(event) => setLabelDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") saveLabel(selectedSavedLink.slug);
+                    if (event.key === "Escape") setIsEditingLabel(false);
+                  }}
+                />
+                <button className="mini-button" type="button" onClick={() => saveLabel(selectedSavedLink.slug)}>
+                  저장
+                </button>
+                <button className="mini-button" type="button" onClick={() => setIsEditingLabel(false)}>
+                  취소
+                </button>
+              </div>
+            ) : (
+              <div className="label-display-row">
+                <strong className="saved-link-label-large">
+                  {selectedSavedLink.label ?? "별명 없음"}
+                </strong>
+                <button
+                  className="mini-button"
+                  type="button"
+                  onClick={() => {
+                    setLabelDraft(selectedSavedLink.label ?? "");
+                    setIsEditingLabel(true);
+                  }}
+                >
+                  ✏️ {selectedSavedLink.label ? "별명 수정" : "별명 붙이기"}
+                </button>
+              </div>
+            )}
             <a
               className="result-link saved-link-modal-url"
               href={selectedSavedLink.shortUrl}
@@ -975,9 +1220,27 @@ export default function HomePage() {
               {selectedSavedUrl}
             </a>
             <p className="result-meta">원본 주소: {selectedSavedLink.destination}</p>
-            <p className="result-meta">
-              만료 예정: {formatDateTime(selectedSavedStats?.expiresAt ?? selectedSavedLink.expiresAt)}
-            </p>
+            <div className="expiry-row">
+              <p className="result-meta">
+                만료 예정: {formatDateTime(selectedSavedStats?.expiresAt ?? selectedSavedLink.expiresAt)}
+                {(() => {
+                  const badge = getExpiryBadge(selectedSavedStats?.expiresAt ?? selectedSavedLink.expiresAt);
+                  return badge ? (
+                    <span className={badge.urgent ? "expiry-badge urgent" : "expiry-badge"}> ⏳ {badge.text}</span>
+                  ) : null;
+                })()}
+              </p>
+              <button
+                className="mini-button"
+                type="button"
+                disabled={isExtending}
+                onClick={() => extendSavedLink(selectedSavedLink.slug)}
+                title="만료를 지금 기준 최대 90일까지, 1개월씩 연장합니다."
+              >
+                {isExtending ? "연장 중..." : "⏰ 만료 1개월 연장"}
+              </button>
+            </div>
+            {extendNotice ? <p className="extend-notice">{extendNotice}</p> : null}
             <p className="result-meta">저장한 시각: {formatDateTime(selectedSavedLink.savedAt)}</p>
             <div className="saved-link-qr-header">
               <strong>QR 코드</strong>
@@ -992,6 +1255,16 @@ export default function HomePage() {
                 >
                   다운로드
                 </a>
+                <button
+                  className="mini-button"
+                  type="button"
+                  onClick={() =>
+                    openQrPrintView(selectedSavedUrl, selectedSavedLink.label ?? "", selectedSavedLink.slug)
+                  }
+                  title="제목과 QR 코드, 짧은 주소가 함께 들어간 A4 인쇄용 화면을 엽니다."
+                >
+                  🖨️ 인쇄용 QR
+                </button>
                 <button
                   className="mini-button pin-btn"
                   type="button"
