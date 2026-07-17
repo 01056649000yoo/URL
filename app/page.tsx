@@ -266,6 +266,15 @@ export default function HomePage() {
     commitHash: "",
   });
 
+  // 만들기 유형: 일반 단축 링크 또는 여러 주소를 묶은 링크 묶음(수업 세트)
+  const [createMode, setCreateMode] = useState<"single" | "bundle">("single");
+  const [customSlug, setCustomSlug] = useState("");
+  const [bundleTitle, setBundleTitle] = useState("");
+  const [bundleItems, setBundleItems] = useState<{ label: string; url: string }[]>([
+    { label: "", url: "" },
+    { label: "", url: "" },
+  ]);
+
   // ==========================================
   // 📌 QR Code Floating Pin Mode State & Logic
   // ==========================================
@@ -275,6 +284,7 @@ export default function HomePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isSystemPipActive, setIsSystemPipActive] = useState(false);
+  const [pinnedRecentVisitors, setPinnedRecentVisitors] = useState<number | null>(null);
 
   // AOT 전용 상태 (페이지 내 플로팅과 완전히 분리)
   const [isAotModalOpen, setIsAotModalOpen] = useState(false);
@@ -319,11 +329,37 @@ export default function HomePage() {
               <img src="${qrImgUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" />
             </div>
             <div style="font-size:11px;font-weight:900;color:#214ad8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;flex-shrink:0;">${shortLabel}</div>
+            <div data-live-count style="font-size:11px;font-weight:800;color:#16a34a;flex-shrink:0;">👥 최근 5분 접속 확인 중...</div>
           </div>
         `;
         pipWindow.document.body.appendChild(container);
 
+        // AOT 창에서도 실시간 입장 인원을 보여줍니다 (수업 중 확인용).
+        const counter = container.querySelector("[data-live-count]") as HTMLElement | null;
+        const refreshLiveCount = async () => {
+          try {
+            const response = await fetch(`/api/link-stats/${encodeURIComponent(slug)}`);
+            if (!response.ok) {
+              if (counter && (response.status === 403 || response.status === 404)) {
+                counter.style.display = "none";
+              }
+              return;
+            }
+            const data = (await response.json()) as LinkStatsResult;
+            if (counter) {
+              counter.textContent = `👥 최근 5분 접속 ${data.recentVisitors ?? 0}명`;
+            }
+          } catch {
+            // 일시적인 오류는 다음 주기에 다시 시도합니다.
+          }
+        };
+        void refreshLiveCount();
+        const liveCountTimer = window.setInterval(() => {
+          void refreshLiveCount();
+        }, 10000);
+
         pipWindow.addEventListener("pagehide", () => {
+          window.clearInterval(liveCountTimer);
           setIsSystemPipActive(false);
         });
       } else {
@@ -401,6 +437,39 @@ export default function HomePage() {
     };
   }, [isDragging, dragStart]);
 
+
+  // 화면에 고정된 QR의 실시간 입장 인원 (수업 중 "몇 명 들어왔나" 확인용)
+  useEffect(() => {
+    const currentSlug = pinnedSlug;
+    if (!currentSlug) {
+      setPinnedRecentVisitors(null);
+      return;
+    }
+
+    let mounted = true;
+
+    async function loadPinnedStats() {
+      try {
+        const response = await fetch(`/api/link-stats/${encodeURIComponent(currentSlug as string)}`);
+        if (!mounted || !response.ok) return;
+        const data = (await response.json()) as LinkStatsResult;
+        if (!mounted) return;
+        setPinnedRecentVisitors(data.recentVisitors ?? 0);
+      } catch {
+        // 일시적인 오류는 다음 주기에 다시 시도합니다.
+      }
+    }
+
+    void loadPinnedStats();
+    const timer = window.setInterval(() => {
+      void loadPinnedStats();
+    }, 10000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [pinnedSlug]);
 
   const resultUrl = result?.displayShortUrl ?? result?.shortUrl ?? "";
   const selectedSavedLink = savedLinks.find((link) => link.slug === selectedSavedSlug) ?? null;
@@ -613,7 +682,7 @@ export default function HomePage() {
 
     async function loadLinkStats() {
       try {
-        const response = await fetch(`/api/link-stats/${currentSlug}`);
+        const response = await fetch(`/api/link-stats/${encodeURIComponent(currentSlug as string)}`);
         const data = (await response.json()) as LinkStatsResult;
 
         if (!mounted || !response.ok) {
@@ -653,7 +722,7 @@ export default function HomePage() {
       const entries = await Promise.all(
         savedLinks.map(async (link) => {
           try {
-            const response = await fetch(`/api/link-stats/${link.slug}`);
+            const response = await fetch(`/api/link-stats/${encodeURIComponent(link.slug)}`);
             const data = (await response.json()) as LinkStatsResult;
             if (!response.ok) return null;
 
@@ -718,10 +787,21 @@ export default function HomePage() {
 
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const payload = {
-      destination: String(formData.get("destination") ?? ""),
+    const payload: Record<string, unknown> = {
       retentionPeriod: String(formData.get("retentionPeriod") ?? "week") as RetentionPeriod,
     };
+
+    const trimmedSlug = customSlug.trim();
+    if (trimmedSlug) {
+      payload.slug = trimmedSlug;
+    }
+
+    if (createMode === "bundle") {
+      payload.bundleTitle = bundleTitle;
+      payload.bundleItems = bundleItems;
+    } else {
+      payload.destination = String(formData.get("destination") ?? "");
+    }
 
     try {
       const response = await fetch("/api/shorten", {
@@ -763,6 +843,12 @@ export default function HomePage() {
       window.localStorage.setItem(LAST_RESULT_KEY, JSON.stringify(data));
       await loadMyLinks();
       form.reset();
+      setCustomSlug("");
+      setBundleTitle("");
+      setBundleItems([
+        { label: "", url: "" },
+        { label: "", url: "" },
+      ]);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "예상치 못한 오류가 발생했습니다.";
       setError(message);
@@ -915,15 +1001,132 @@ export default function HomePage() {
         </section>
 
         <form className="stack" onSubmit={handleSubmit}>
+          <div className="label">
+            <span>만들기 유형</span>
+            <div className="retention-options" role="radiogroup" aria-label="만들기 유형 선택">
+              <label className="retention-option">
+                <input
+                  type="radio"
+                  name="createMode"
+                  value="single"
+                  checked={createMode === "single"}
+                  onChange={() => setCreateMode("single")}
+                />
+                <span>일반 링크</span>
+              </label>
+              <label className="retention-option">
+                <input
+                  type="radio"
+                  name="createMode"
+                  value="bundle"
+                  checked={createMode === "bundle"}
+                  onChange={() => setCreateMode("bundle")}
+                />
+                <span>링크 묶음</span>
+              </label>
+            </div>
+          </div>
+
+          {createMode === "single" ? (
+            <label className="label">
+              <span>원본 주소</span>
+              <input
+                className="field"
+                name="destination"
+                type="url"
+                placeholder="https://example.com/some/very/long/path"
+                required
+              />
+            </label>
+          ) : (
+            <div className="label">
+              <span>묶을 링크들</span>
+              <p className="bundle-editor-hint">
+                하나의 짧은 주소로 여러 링크를 함께 전달합니다. 학생은 버튼 목록에서 골라 이동해요.
+              </p>
+              <input
+                className="field"
+                type="text"
+                value={bundleTitle}
+                maxLength={60}
+                placeholder="묶음 제목 (예: 월요일 3교시 과학)"
+                onChange={(event) => setBundleTitle(event.target.value)}
+              />
+              <div className="bundle-editor-list">
+                {bundleItems.map((item, index) => (
+                  <div className="bundle-editor-row" key={index}>
+                    <input
+                      className="field bundle-editor-label"
+                      type="text"
+                      value={item.label}
+                      maxLength={40}
+                      placeholder={`이름 (예: 활동지 ${index + 1})`}
+                      onChange={(event) =>
+                        setBundleItems((current) =>
+                          current.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, label: event.target.value } : entry,
+                          ),
+                        )
+                      }
+                    />
+                    <input
+                      className="field bundle-editor-url"
+                      type="url"
+                      value={item.url}
+                      required
+                      placeholder="https://..."
+                      onChange={(event) =>
+                        setBundleItems((current) =>
+                          current.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, url: event.target.value } : entry,
+                          ),
+                        )
+                      }
+                    />
+                    {bundleItems.length > 2 ? (
+                      <button
+                        className="mini-button danger bundle-editor-remove"
+                        type="button"
+                        aria-label={`${index + 1}번째 링크 제거`}
+                        onClick={() =>
+                          setBundleItems((current) =>
+                            current.filter((_, entryIndex) => entryIndex !== index),
+                          )
+                        }
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              {bundleItems.length < 8 ? (
+                <button
+                  className="mini-button bundle-editor-add"
+                  type="button"
+                  onClick={() =>
+                    setBundleItems((current) => [...current, { label: "", url: "" }])
+                  }
+                >
+                  ＋ 링크 추가 ({bundleItems.length}/8)
+                </button>
+              ) : null}
+            </div>
+          )}
+
           <label className="label">
-            <span>원본 주소</span>
-            <input
-              className="field"
-              name="destination"
-              type="url"
-              placeholder="https://example.com/some/very/long/path"
-              required
-            />
+            <span>원하는 주소 이름 (선택)</span>
+            <div className="slug-input-row">
+              <span className="slug-prefix">{BRAND_DOMAIN}/</span>
+              <input
+                className="field slug-input"
+                type="text"
+                value={customSlug}
+                maxLength={30}
+                placeholder="예: 3반과학 · 비우면 자동 생성"
+                onChange={(event) => setCustomSlug(event.target.value)}
+              />
+            </div>
           </label>
 
           <div className="label">
@@ -952,9 +1155,15 @@ export default function HomePage() {
           </div>
 
           <button className="submit" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "만드는 중..." : "단축링크 만들기"}
+            {isSubmitting
+              ? "만드는 중..."
+              : createMode === "bundle"
+                ? "링크 묶음 만들기"
+                : "단축링크 만들기"}
           </button>
-          <p className="form-hint">생성 형식: {BRAND_DOMAIN}/코드4자</p>
+          <p className="form-hint">
+            생성 형식: {BRAND_DOMAIN}/코드4자 · 한글 이름도 가능 (예: {BRAND_DOMAIN}/3반과학)
+          </p>
         </form>
 
         {result ? (
@@ -1157,6 +1366,16 @@ export default function HomePage() {
                 className="mini-button"
                 type="button"
                 onClick={() => {
+                  if (result) window.open(`/present/${encodeURIComponent(result.slug)}`, "_blank");
+                }}
+                title="프로젝터·전자칠판용 전체화면으로 큰 QR과 주소, 실시간 입장 인원을 보여줍니다."
+              >
+                🎬 발표 모드
+              </button>
+              <button
+                className="mini-button"
+                type="button"
+                onClick={() => {
                   if (result) handleSystemAlwaysOnTop(resultUrl, result.slug);
                   setIsQrOpen(false);
                 }}
@@ -1286,6 +1505,16 @@ export default function HomePage() {
                   title="제목과 QR 코드, 짧은 주소가 함께 들어간 A4 인쇄용 화면을 엽니다."
                 >
                   🖨️ 인쇄
+                </button>
+                <button
+                  className="mini-button"
+                  type="button"
+                  onClick={() =>
+                    window.open(`/present/${encodeURIComponent(selectedSavedLink.slug)}`, "_blank")
+                  }
+                  title="프로젝터·전자칠판용 전체화면으로 큰 QR과 주소, 실시간 입장 인원을 보여줍니다."
+                >
+                  🎬 발표 모드
                 </button>
                 <button
                   className="mini-button"
@@ -1445,6 +1674,11 @@ export default function HomePage() {
               >
                 {pinnedQrUrl.replace(/^https?:\/\//, "")}
               </a>
+              {pinnedRecentVisitors !== null ? (
+                <span className="floating-qr-count" aria-live="polite">
+                  👥 최근 5분 {pinnedRecentVisitors}명 접속
+                </span>
+              ) : null}
             </div>
           </div>
         </div>

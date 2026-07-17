@@ -8,7 +8,13 @@ function toDisplayUrl(shortUrl: string) {
   try {
     const parsed = new URL(shortUrl);
     const unicodeHost = domainToUnicode(parsed.hostname) || parsed.hostname;
-    return `${parsed.protocol}//${unicodeHost}${parsed.port ? `:${parsed.port}` : ""}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    let pathname = parsed.pathname;
+    try {
+      pathname = decodeURIComponent(pathname);
+    } catch {
+      // 인코딩 해제가 안 되면 원본 경로를 그대로 보여줍니다.
+    }
+    return `${parsed.protocol}//${unicodeHost}${parsed.port ? `:${parsed.port}` : ""}${pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return shortUrl;
   }
@@ -32,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     const baseUrl = getBaseUrl(request);
     const links = (data ?? []).map((link) => {
-      const shortUrl = `${baseUrl}/${link.slug}`;
+      const shortUrl = `${baseUrl}/${encodeURIComponent(link.slug)}`;
       return {
         slug: link.slug,
         destination: link.destination,

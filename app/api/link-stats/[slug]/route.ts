@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateDeviceId } from "@/lib/device-cookie";
+import { decodeSlugParam } from "@/lib/slug";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type RouteContext = {
@@ -16,7 +17,8 @@ type LinkVisitStats = {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const { slug } = await context.params;
+    const { slug: rawSlug } = await context.params;
+    const slug = decodeSlugParam(rawSlug);
     const { deviceId } = getOrCreateDeviceId(request);
     const admin = createAdminClient();
     const recentThresholdIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();

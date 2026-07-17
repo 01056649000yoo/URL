@@ -14,7 +14,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ExtendPayload;
-    const slug = body.slug?.trim();
+    const slug = body.slug?.trim().normalize("NFC");
 
     if (!slug) {
       return NextResponse.json({ error: "연장할 링크를 찾을 수 없습니다." }, { status: 400 });

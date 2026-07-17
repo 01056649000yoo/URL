@@ -12,6 +12,10 @@ create table if not exists public.short_links (
 alter table public.short_links
 add column if not exists expires_at timestamptz;
 
+-- 링크 묶음(수업 세트): null이면 일반 링크, 값이 있으면 {"title", "items":[{"label","url"}]}
+alter table public.short_links
+add column if not exists bundle_items jsonb;
+
 create index if not exists short_links_expires_at_idx
 on public.short_links (expires_at);
 

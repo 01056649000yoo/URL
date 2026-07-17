@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { decodeSlugParam } from "@/lib/slug";
 import {
   getOrCreateVisitorIdentity,
   getRequestReferrer,
@@ -15,7 +16,8 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  const { slug } = await context.params;
+  const { slug: rawSlug } = await context.params;
+  const slug = decodeSlugParam(rawSlug);
   const admin = createAdminClient();
   const visitor = getOrCreateVisitorIdentity(request);
 

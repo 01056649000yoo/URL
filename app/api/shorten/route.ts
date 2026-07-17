@@ -6,21 +6,75 @@ import { generateSlug, normalizeSlug } from "@/lib/slug";
 import { getRateLimitKey } from "@/lib/rate-limit";
 import { getBaseUrl } from "@/lib/site-url";
 
+type BundleItemPayload = {
+  label?: string;
+  url?: string;
+};
+
 type CreateLinkPayload = {
   destination?: string;
   slug?: string;
   createdBy?: string;
   retentionPeriod?: "day" | "week" | "month" | "quarter";
+  bundleTitle?: string;
+  bundleItems?: BundleItemPayload[];
 };
+
+const BUNDLE_MIN_ITEMS = 2;
+const BUNDLE_MAX_ITEMS = 8;
 
 function toDisplayUrl(shortUrl: string) {
   try {
     const parsed = new URL(shortUrl);
     const unicodeHost = domainToUnicode(parsed.hostname) || parsed.hostname;
-    return `${parsed.protocol}//${unicodeHost}${parsed.port ? `:${parsed.port}` : ""}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    let pathname = parsed.pathname;
+    try {
+      pathname = decodeURIComponent(pathname);
+    } catch {
+      // 인코딩 해제가 안 되면 원본 경로를 그대로 보여줍니다.
+    }
+    return `${parsed.protocol}//${unicodeHost}${parsed.port ? `:${parsed.port}` : ""}${pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return shortUrl;
   }
+}
+
+// 링크 묶음 항목을 검증해 jsonb에 저장할 형태로 만듭니다. 문제가 있으면 에러 메시지를 반환합니다.
+function buildBundlePayload(title: string | undefined, items: BundleItemPayload[]) {
+  if (items.length < BUNDLE_MIN_ITEMS || items.length > BUNDLE_MAX_ITEMS) {
+    return { error: `링크 묶음은 ${BUNDLE_MIN_ITEMS}개 이상 ${BUNDLE_MAX_ITEMS}개 이하로 만들 수 있습니다.` } as const;
+  }
+
+  const cleanItems: { label: string; url: string }[] = [];
+  for (const item of items) {
+    const rawUrl = item.url?.trim();
+    if (!rawUrl) {
+      return { error: "묶음에 포함된 주소를 모두 입력해 주세요." } as const;
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return { error: `올바른 주소 형식이 아닙니다: ${rawUrl.slice(0, 80)}` } as const;
+    }
+
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return { error: "묶음에는 http 또는 https 주소만 넣을 수 있습니다." } as const;
+    }
+
+    cleanItems.push({
+      label: (item.label ?? "").trim().slice(0, 40),
+      url: parsed.toString(),
+    });
+  }
+
+  return {
+    payload: {
+      title: (title ?? "").trim().slice(0, 60),
+      items: cleanItems,
+    },
+  } as const;
 }
 
 function retentionDaysFromPeriod(period: CreateLinkPayload["retentionPeriod"]) {
@@ -46,23 +100,35 @@ export async function POST(request: NextRequest) {
     const { deviceId } = getOrCreateDeviceId(request);
     const createdBy = deviceId;
     const retentionDays = retentionDaysFromPeriod(body.retentionPeriod);
+    const bundleItems = Array.isArray(body.bundleItems) ? body.bundleItems : [];
+    const isBundle = bundleItems.length > 0;
 
-    if (!destination) {
-      return NextResponse.json({ error: "원본 주소를 입력해 주세요." }, { status: 400 });
-    }
+    let bundlePayload: { title: string; items: { label: string; url: string }[] } | null = null;
+    let parsedUrl: URL | null = null;
 
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(destination);
-    } catch {
-      return NextResponse.json({ error: "올바른 주소 형식이 아닙니다." }, { status: 400 });
-    }
+    if (isBundle) {
+      const bundleResult = buildBundlePayload(body.bundleTitle, bundleItems);
+      if ("error" in bundleResult) {
+        return NextResponse.json({ error: bundleResult.error }, { status: 400 });
+      }
+      bundlePayload = bundleResult.payload;
+    } else {
+      if (!destination) {
+        return NextResponse.json({ error: "원본 주소를 입력해 주세요." }, { status: 400 });
+      }
 
-    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-      return NextResponse.json(
-        { error: "http 또는 https 주소만 사용할 수 있습니다." },
-        { status: 400 },
-      );
+      try {
+        parsedUrl = new URL(destination);
+      } catch {
+        return NextResponse.json({ error: "올바른 주소 형식이 아닙니다." }, { status: 400 });
+      }
+
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        return NextResponse.json(
+          { error: "http 또는 https 주소만 사용할 수 있습니다." },
+          { status: 400 },
+        );
+      }
     }
 
     if (!retentionDays) {
@@ -116,19 +182,27 @@ export async function POST(request: NextRequest) {
     }
 
     const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const baseUrl = getBaseUrl(request);
 
     // 자동 생성 슬러그는 충돌 시 재시도하고, 반복 충돌하면 길이를 늘려 확률을 낮춥니다.
     const maxAttempts = suppliedSlug ? 1 : 5;
     let data: { slug: string; destination: string; expires_at: string | null } | null = null;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      // 묶음 링크는 자체 목록 페이지(/b/슬러그)를 목적지로 사용해
+      // 리다이렉트 로직을 바꾸지 않고도 동작합니다.
+      const attemptDestination = isBundle
+        ? `${baseUrl}/b/${encodeURIComponent(slug)}`
+        : (parsedUrl as URL).toString();
+
       const { data: inserted, error } = await admin
         .from("short_links")
         .insert({
           slug,
-          destination: parsedUrl.toString(),
+          destination: attemptDestination,
           created_by: createdBy,
           expires_at: expiresAt,
+          ...(isBundle ? { bundle_items: bundlePayload } : {}),
         })
         .select("slug, destination, expires_at")
         .single();
@@ -163,7 +237,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const shortUrl = `${getBaseUrl(request)}/${data.slug}`;
+    const shortUrl = `${baseUrl}/${encodeURIComponent(data.slug)}`;
 
     const response = NextResponse.json({
       slug: data.slug,
@@ -172,6 +246,8 @@ export async function POST(request: NextRequest) {
       displayShortUrl: toDisplayUrl(shortUrl),
       expiresAt: data.expires_at,
       retentionPeriod: body.retentionPeriod,
+      isBundle,
+      bundleTitle: bundlePayload?.title ?? undefined,
     });
     setDeviceCookie(response, deviceId);
     return response;
