@@ -4,6 +4,24 @@ const ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
 const DEFAULT_SLUG_LENGTH = 4;
 const MAX_SLUG_LENGTH = 30;
 
+// 앱 라우트·정적 파일과 겹치는 이름은 링크가 만들어져도 절대 접속할 수 없으므로 생성 단계에서 거부합니다.
+const RESERVED_SLUGS = new Set([
+  "admin",
+  "api",
+  "b",
+  "present",
+  "_next",
+  "assets",
+  "public",
+  "robots.txt",
+  "sitemap.xml",
+  "favicon.ico",
+]);
+
+export function isReservedSlug(value: string) {
+  return RESERVED_SLUGS.has(value.toLowerCase());
+}
+
 // URL 경로로 들어온 슬러그는 인코딩·유니코드 정규화 상태가 제각각이므로
 // 조회 전에 반드시 같은 형태(NFC)로 맞춥니다.
 export function decodeSlugParam(value: string) {

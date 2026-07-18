@@ -1,0 +1,27 @@
+name: Uptime check
+
+# GitHub 서버(외부 시점)에서 15분마다 샘링크.kr 가동 여부를 확인합니다.
+# 실패하면 GitHub이 저장소 소유자에게 워크플로 실패 알림 메일을 보냅니다.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check 샘링크.kr
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://xn--9y2br3k43n.kr/api/stats" || echo "000")
+            if [ "$code" = "200" ]; then
+              echo "OK (attempt $attempt)"
+              exit 0
+            fi
+            echo "attempt $attempt failed with status $code — retrying"
+            sleep 20
+          done
+          echo "샘링크.kr 응답 없음 (마지막 상태: $code)"
+          exit 1

@@ -1355,7 +1355,11 @@ export default function HomePage() {
       </section>
 
       <footer className="site-footer" aria-label="사업자 정보">
-        상호명: 끄적끄적 아지트 | 운영책임자: 유승현 | 문의: <a href="mailto:yshgg@naver.com">yshgg@naver.com</a> | © 2026 끄적끄적 아지트. All rights reserved.
+        상호명: 끄적끄적 아지트 | 운영책임자: 유승현 | 문의: <a href="mailto:yshgg@naver.com">yshgg@naver.com</a> |{" "}
+        <a href="mailto:yshgg@naver.com?subject=%5B%EC%83%98%EB%A7%81%ED%81%AC%20%EC%8B%A0%EA%B3%A0%5D%20%EC%95%85%EC%84%B1%C2%B7%EB%B6%80%EC%A0%81%EC%A0%88%20%EB%A7%81%ED%81%AC&body=%EC%8B%A0%EA%B3%A0%ED%95%A0%20%EC%A7%A7%EC%9D%80%20%EC%A3%BC%EC%86%8C%3A%20">
+          악성·부적절 링크 신고
+        </a>{" "}
+        | © 2026 끄적끄적 아지트. All rights reserved.
       </footer>
 
       {isQrOpen && resultUrl ? (

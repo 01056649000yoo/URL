@@ -160,7 +160,7 @@ begin
 
   delete from public.short_link_rate_limits
   where (bucket like '%minute%' and window_start < timezone('utc', now()) - interval '2 days')
-     or (bucket = 'day' and window_start < timezone('utc', now()) - interval '90 days');
+     or (bucket like '%day%' and window_start < timezone('utc', now()) - interval '90 days');
 
   delete from public.page_visits
   where day_utc < (timezone('utc', now()) - interval '90 days')::date;
@@ -241,11 +241,12 @@ $$;
 
 drop function if exists public.consume_short_link_rate_limit(text);
 
-create or replace function public.consume_short_link_rate_limit(p_ip_hash text)
+create or replace function public.consume_short_link_rate_limit(
+  p_ip_hash text,
+  p_device_hash text default null
+)
 returns table (
   allowed boolean,
-  minute_count integer,
-  day_count integer,
   retry_after_seconds integer
 )
 language plpgsql
@@ -253,14 +254,22 @@ security definer
 set search_path = public
 as $$
 declare
-  minute_bucket_start timestamptz;
-  day_bucket_start timestamptz;
-  minute_limit constant integer := 5;
-  day_limit constant integer := 20;
-  global_day_limit constant integer := 1000;
+  dev_minute_limit constant integer := 10;
+  dev_day_limit constant integer := 50;
+  ip_minute_limit constant integer := 60;
+  ip_day_limit constant integer := 300;
+  global_day_limit constant integer := 3000;
   today_created integer := 0;
   today date := timezone('utc', now())::date;
   now_utc timestamptz := timezone('utc', now());
+  minute_bucket_start timestamptz;
+  day_bucket_start timestamptz;
+  ip_minute_count integer := 0;
+  ip_day_count integer := 0;
+  dev_minute_count integer := 0;
+  dev_day_count integer := 0;
+  minute_exceeded boolean := false;
+  day_exceeded boolean := false;
 begin
   select coalesce(created_count, 0)
   into today_created
@@ -269,8 +278,6 @@ begin
 
   if today_created >= global_day_limit then
     allowed := false;
-    minute_count := 0;
-    day_count := today_created;
     retry_after_seconds := greatest(
       extract(epoch from ((today::timestamptz + interval '1 day') - now_utc))::integer,
       1
@@ -289,30 +296,49 @@ begin
   values (p_ip_hash, 'minute', minute_bucket_start, 1)
   on conflict (ip_hash, bucket, window_start)
   do update set request_count = public.short_link_rate_limits.request_count + 1
-  returning request_count into minute_count;
+  returning request_count into ip_minute_count;
 
   insert into public.short_link_rate_limits (ip_hash, bucket, window_start, request_count)
   values (p_ip_hash, 'day', day_bucket_start, 1)
   on conflict (ip_hash, bucket, window_start)
   do update set request_count = public.short_link_rate_limits.request_count + 1
-  returning request_count into day_count;
+  returning request_count into ip_day_count;
 
-  allowed := minute_count <= minute_limit and day_count <= day_limit;
+  if p_device_hash is not null then
+    insert into public.short_link_rate_limits (ip_hash, bucket, window_start, request_count)
+    values (p_device_hash, 'dev-minute', minute_bucket_start, 1)
+    on conflict (ip_hash, bucket, window_start)
+    do update set request_count = public.short_link_rate_limits.request_count + 1
+    returning request_count into dev_minute_count;
+
+    insert into public.short_link_rate_limits (ip_hash, bucket, window_start, request_count)
+    values (p_device_hash, 'dev-day', day_bucket_start, 1)
+    on conflict (ip_hash, bucket, window_start)
+    do update set request_count = public.short_link_rate_limits.request_count + 1
+    returning request_count into dev_day_count;
+  end if;
+
+  minute_exceeded := ip_minute_count > ip_minute_limit or dev_minute_count > dev_minute_limit;
+  day_exceeded := ip_day_count > ip_day_limit or dev_day_count > dev_day_limit;
+
+  allowed := not minute_exceeded and not day_exceeded;
   retry_after_seconds := 0;
 
-  if minute_count > minute_limit then
+  if minute_exceeded then
     retry_after_seconds := greatest(60 - mod(floor(extract(epoch from now_utc))::integer, 60), 1);
-  elsif day_count > day_limit then
+  elsif day_exceeded then
     retry_after_seconds := greatest(
       extract(epoch from ((day_bucket_start + interval '1 day') - now_utc))::integer,
       1
     );
   end if;
 
-  return query
-    select allowed, minute_count, day_count, retry_after_seconds;
+  return next;
 end;
 $$;
+
+revoke execute on function public.consume_short_link_rate_limit(text, text) from public, anon, authenticated;
+grant execute on function public.consume_short_link_rate_limit(text, text) to service_role;
 
 create or replace function public.enforce_short_link_capacity()
 returns trigger

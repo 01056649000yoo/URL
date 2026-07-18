@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { domainToUnicode } from "node:url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOrCreateDeviceId, setDeviceCookie } from "@/lib/device-cookie";
-import { generateSlug, normalizeSlug } from "@/lib/slug";
-import { getRateLimitKey } from "@/lib/rate-limit";
+import { generateSlug, isReservedSlug, normalizeSlug } from "@/lib/slug";
+import { getDeviceRateLimitKey, getRateLimitKey } from "@/lib/rate-limit";
+import { checkUrlsSafety, describeThreat } from "@/lib/safe-browsing";
 import { getBaseUrl } from "@/lib/site-url";
 
 type BundleItemPayload = {
@@ -143,17 +144,24 @@ export async function POST(request: NextRequest) {
       slug = suppliedSlug ? normalizeSlug(suppliedSlug) : generateSlug();
     } catch {
       return NextResponse.json(
-        { error: "짧은 주소 이름은 영문, 숫자, 하이픈, 밑줄만 사용할 수 있습니다." },
+        { error: "짧은 주소 이름은 한글, 영문, 숫자, 하이픈(-), 밑줄(_)만 사용할 수 있습니다 (최대 30자)." },
+        { status: 400 },
+      );
+    }
+
+    if (isReservedSlug(slug)) {
+      return NextResponse.json(
+        { error: "이 이름은 서비스에서 사용하는 예약어라 쓸 수 없습니다. 다른 이름을 입력해 주세요." },
         { status: 400 },
       );
     }
 
     const admin = createAdminClient();
-    const rateLimitKey = getRateLimitKey(request);
     const { data: rateLimitData, error: rateLimitError } = await admin.rpc(
       "consume_short_link_rate_limit",
       {
-        p_ip_hash: rateLimitKey,
+        p_ip_hash: getRateLimitKey(request),
+        p_device_hash: getDeviceRateLimitKey(deviceId),
       },
     );
 
@@ -178,6 +186,20 @@ export async function POST(request: NextRequest) {
             "Retry-After": String(waitSeconds),
           },
         },
+      );
+    }
+
+    // 피싱·멀웨어 목적지 차단 (API 키가 설정된 경우에만 검사)
+    const urlsToCheck = isBundle
+      ? (bundlePayload?.items ?? []).map((item) => item.url)
+      : [(parsedUrl as URL).toString()];
+    const safety = await checkUrlsSafety(urlsToCheck);
+    if (!safety.safe) {
+      return NextResponse.json(
+        {
+          error: `이 주소는 Google Safe Browsing에서 ${describeThreat(safety.threatType)} 사이트로 분류되어 단축할 수 없습니다.`,
+        },
+        { status: 400 },
       );
     }
 

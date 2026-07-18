@@ -103,7 +103,14 @@ export default async function BundlePage({ params }: PageProps) {
             );
           })}
         </div>
-        <p className="bundle-footer">샘링크 · 샘링크.kr</p>
+        <p className="bundle-footer">
+          샘링크 · 샘링크.kr ·{" "}
+          <a
+            href={`mailto:yshgg@naver.com?subject=${encodeURIComponent("[샘링크 신고] 악성·부적절 링크")}&body=${encodeURIComponent(`신고할 짧은 주소: 샘링크.kr/${bundle.slug}\n사유: `)}`}
+          >
+            이 묶음 신고
+          </a>
+        </p>
       </section>
     </main>
   );
