@@ -34,11 +34,20 @@ function isOwnShortUrl(data: string, request: Request) {
   } catch {
     // SITE_URL이 잘못돼도 요청 호스트 기준 검증은 계속합니다.
   }
-  try {
-    const requestHost = new URL(request.url).hostname;
-    allowedHosts.add(domainToUnicode(requestHost) || requestHost);
-  } catch {
-    // 요청 URL 파싱 실패 시 SITE_URL 기준만 사용합니다.
+  // Next.js는 request.url의 호스트를 실제 접속 호스트로 보장하지 않으므로
+  // Host 헤더(프록시 뒤에서는 x-forwarded-host)를 직접 읽습니다.
+  const forwardedHost =
+    process.env.TRUST_PROXY_HEADERS === "true"
+      ? request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+      : null;
+  const hostHeader = forwardedHost || request.headers.get("host")?.trim();
+  if (hostHeader) {
+    try {
+      const requestHost = new URL(`http://${hostHeader}`).hostname;
+      allowedHosts.add(domainToUnicode(requestHost) || requestHost);
+    } catch {
+      // Host 헤더 파싱 실패 시 SITE_URL 기준만 사용합니다.
+    }
   }
 
   if (!allowedHosts.size) {
