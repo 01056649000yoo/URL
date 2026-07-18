@@ -35,12 +35,10 @@ export async function GET(request: Request, context: RouteContext) {
   const isExpired = expiresAt !== null && expiresAt <= Date.now();
 
   if (!data.is_active || isExpired) {
-    const { data: deleted } = await admin
-      .from("short_links")
-      .delete()
-      .eq("id", data.id)
-      .select("id");
-    return NextResponse.json({ error: "링크가 만료되었습니다." }, { status: 404 });
+    // 만료 즉시 삭제하지 않습니다 — 30일 유예 동안 소유자가 복구할 수 있고,
+    // 유예가 지난 링크는 시간당 청소 작업이 정리합니다.
+    // 상대 경로 Location이라 어떤 호스트·프로토콜로 접속했든 올바르게 이동합니다.
+    return new NextResponse(null, { status: 302, headers: { Location: "/expired" } });
   }
 
   await Promise.allSettled([

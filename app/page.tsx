@@ -101,6 +101,24 @@ function isExpired(value?: string | null) {
   return Number.isFinite(time) && time <= Date.now();
 }
 
+// 만료 후 30일 유예 — DB 청소(delete_expired_short_links)의 유예 기간과 반드시 같아야 합니다.
+const GRACE_DAYS = 30;
+
+function isPastGrace(value?: string | null) {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && time + GRACE_DAYS * 24 * 60 * 60 * 1000 <= Date.now();
+}
+
+// 유예 중인 링크가 완전 삭제되기까지 남은 일수
+function getGraceDaysLeft(value?: string | null) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return 0;
+  const remaining = time + GRACE_DAYS * 24 * 60 * 60 * 1000 - Date.now();
+  return Math.max(Math.ceil(remaining / (24 * 60 * 60 * 1000)), 0);
+}
+
 // 만료 7일 전부터 D-day 배지를 보여줍니다 (3일 이하는 강조).
 function getExpiryBadge(value?: string | null): { text: string; urgent: boolean } | null {
   if (!value) return null;
@@ -225,7 +243,8 @@ function readSavedLinks() {
     const raw = window.localStorage.getItem(MY_LINKS_KEY);
     if (!raw) return [] as SavedLink[];
     const parsed = JSON.parse(raw) as SavedLink[];
-    return parsed.filter((link) => link.slug && link.shortUrl && !isExpired(link.expiresAt));
+    // 만료되어도 30일 유예 동안은 복구할 수 있도록 보관함에 유지합니다.
+    return parsed.filter((link) => link.slug && link.shortUrl && !isPastGrace(link.expiresAt));
   } catch {
     return [] as SavedLink[];
   }
@@ -778,7 +797,7 @@ export default function HomePage() {
       const filteredLinks = savedLinks.filter((link) => {
         const statsForLink = nextStats[link.slug];
         if (statsForLink && statsForLink.isActive === false) return false;
-        if (isExpired(statsForLink?.expiresAt ?? link.expiresAt)) return false;
+        if (isPastGrace(statsForLink?.expiresAt ?? link.expiresAt)) return false;
         return true;
       });
 
@@ -860,7 +879,7 @@ export default function HomePage() {
       };
       const merged = [
         nextSaved,
-        ...readSavedLinks().filter((link) => link.slug !== nextSaved.slug && !isExpired(link.expiresAt)),
+        ...readSavedLinks().filter((link) => link.slug !== nextSaved.slug && !isPastGrace(link.expiresAt)),
       ].slice(0, MAX_SAVED_LINKS);
       setSavedLinks(merged);
       writeSavedLinks(merged);
@@ -1282,15 +1301,17 @@ export default function HomePage() {
                 const statsForLink = savedLinkStats[link.slug];
                 const effectiveExpiresAt = statsForLink?.expiresAt ?? link.expiresAt;
                 const linkExpired = isExpired(effectiveExpiresAt);
-                const isDead = link.isActive === false || linkExpired;
-                const expiryBadge = isDead ? null : getExpiryBadge(effectiveExpiresAt);
+                // 만료돼도 30일 유예 동안은 카드를 열어 복구할 수 있습니다. 비활성(관리자 차단)만 클릭 불가.
+                const isDisabled = link.isActive === false;
+                const expiryBadge =
+                  isDisabled || linkExpired ? null : getExpiryBadge(effectiveExpiresAt);
 
                 return (
                   <button
                     className="saved-link-item"
                     type="button"
                     key={link.slug}
-                    disabled={isDead}
+                    disabled={isDisabled}
                     onClick={() => openMergedLink(link)}
                   >
                     <div className="saved-link-item-main">
@@ -1299,9 +1320,10 @@ export default function HomePage() {
                       <span>{link.destination}</span>
                     </div>
                     <div className="saved-link-item-meta">
-                      {isDead ? (
-                        <span className="my-link-status">
-                          {link.isActive === false ? "비활성" : "만료됨"}
+                      {isDisabled ? <span className="my-link-status">비활성</span> : null}
+                      {!isDisabled && linkExpired ? (
+                        <span className="expiry-badge urgent">
+                          만료 · {getGraceDaysLeft(effectiveExpiresAt)}일 내 복구 가능
                         </span>
                       ) : null}
                       {expiryBadge ? (
@@ -1511,26 +1533,50 @@ export default function HomePage() {
               {selectedSavedUrl}
             </a>
             <p className="result-meta">원본 주소: {selectedSavedLink.destination}</p>
-            <div className="expiry-row">
-              <p className="result-meta">
-                만료 예정: {formatDateTime(selectedSavedStats?.expiresAt ?? selectedSavedLink.expiresAt)}
-                {(() => {
-                  const badge = getExpiryBadge(selectedSavedStats?.expiresAt ?? selectedSavedLink.expiresAt);
-                  return badge ? (
-                    <span className={badge.urgent ? "expiry-badge urgent" : "expiry-badge"}> ⏳ {badge.text}</span>
-                  ) : null;
-                })()}
-              </p>
-              <button
-                className="mini-button"
-                type="button"
-                disabled={isExtending}
-                onClick={() => extendSavedLink(selectedSavedLink.slug)}
-                title="만료를 지금 기준 최대 90일까지, 1개월씩 연장합니다."
-              >
-                {isExtending ? "연장 중..." : "⏰ 만료 1개월 연장"}
-              </button>
-            </div>
+            {(() => {
+              const effectiveExpiresAt =
+                selectedSavedStats?.expiresAt ?? selectedSavedLink.expiresAt;
+              const expired = isExpired(effectiveExpiresAt);
+              const badge = expired ? null : getExpiryBadge(effectiveExpiresAt);
+
+              return (
+                <div className="expiry-row">
+                  <p className="result-meta">
+                    {expired ? (
+                      <>
+                        만료됨:{" "}
+                        <span className="expiry-badge urgent">
+                          {getGraceDaysLeft(effectiveExpiresAt)}일 뒤 완전 삭제
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        만료 예정: {formatDateTime(effectiveExpiresAt)}
+                        {badge ? (
+                          <span className={badge.urgent ? "expiry-badge urgent" : "expiry-badge"}>
+                            {" "}
+                            ⏳ {badge.text}
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </p>
+                  <button
+                    className="mini-button"
+                    type="button"
+                    disabled={isExtending}
+                    onClick={() => extendSavedLink(selectedSavedLink.slug)}
+                    title={
+                      expired
+                        ? "만료된 링크를 다시 살립니다. 복구하면 지금부터 30일간 사용할 수 있습니다."
+                        : "만료를 지금 기준 최대 90일까지, 1개월씩 연장합니다."
+                    }
+                  >
+                    {isExtending ? "처리 중..." : expired ? "🔄 복구하기 (+30일)" : "⏰ 만료 1개월 연장"}
+                  </button>
+                </div>
+              );
+            })()}
             {extendNotice ? <p className="extend-notice">{extendNotice}</p> : null}
             <p className="result-meta">저장한 시각: {formatDateTime(selectedSavedLink.savedAt)}</p>
             <hr className="modal-divider" />

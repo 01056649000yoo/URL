@@ -147,10 +147,12 @@ set search_path = public
 as $$
 declare
   deleted_count integer;
+  grace constant interval := interval '30 days';
 begin
+  -- 만료 후 30일 유예: 유예 기간이 지난 링크만 완전 삭제 (그동안은 소유자가 복구 가능)
   delete from public.short_links
   where expires_at is not null
-    and expires_at <= timezone('utc', now());
+    and expires_at <= timezone('utc', now()) - grace;
 
   get diagnostics deleted_count = row_count;
 
