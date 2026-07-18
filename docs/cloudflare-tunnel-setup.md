@@ -1,5 +1,11 @@
 # Cloudflare Tunnel 설정 가이드 (맥미니에서 작업)
 
+> ✅ **2026-07-18 적용 완료**: 샘링크.kr은 이 가이드의 전용 터널 대신,
+> 같은 Mac에서 이미 돌고 있던 **jarvis-tunnel**(+jarvis-caddy)을 통해 서비스되고 있음이 확인됨.
+> DNS(CNAME → 4f39e38f….cfargotunnel.com)와 Caddy 라우팅(→ host.docker.internal:3002)이 이미 구성돼 있고,
+> `.env.local`에 `TRUST_PROXY_HEADERS=true`도 적용됨. **남은 일은 6단계(공유기 포트포워딩 3002 삭제)뿐.**
+> 아래 내용은 전용 터널을 새로 만들 때를 위한 참고용으로 남겨둔다.
+
 > 목적: 맥미니 서버의 "뒷문"(공유기 포트포워딩)을 없애고,
 > 모든 접속이 반드시 Cloudflare(경비원)를 거치게 만든다.
 > 소요 시간: 약 20~30분. 작업 중에도 사이트는 계속 동작한다.

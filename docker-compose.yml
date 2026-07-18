@@ -10,18 +10,9 @@ services:
       - "3002:3000"
     restart: unless-stopped
 
-  # Cloudflare Tunnel: 공유기 포트포워딩 없이 Cloudflare를 통해서만 접속받는다.
-  # .env.local 에 TUNNEL_TOKEN 이 설정되기 전까지는 재시작을 반복하지만 다른 서비스에는 영향 없음.
-  # 설정 방법: docs/cloudflare-tunnel-setup.md
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: samlink-tunnel
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: "${TUNNEL_TOKEN}"
-    depends_on:
-      - app
-    restart: unless-stopped
+  # Cloudflare Tunnel은 이 스택이 아니라 같은 Mac의 jarvis-tunnel(+jarvis-caddy)이 담당한다.
+  # 경로: Cloudflare → jarvis-tunnel → jarvis-caddy(:8001) → host.docker.internal:3002 → app
+  # 그래서 .env.local 의 TRUST_PROXY_HEADERS=true 가 필요하다 (실제 방문자 IP 헤더 신뢰).
 
   cleanup:
     image: curlimages/curl:8.12.1
