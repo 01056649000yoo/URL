@@ -1000,7 +1000,14 @@ export default function HomePage() {
           </aside>
         </section>
 
-        <form className="stack" onSubmit={handleSubmit}>
+        <form className="stack create-form" onSubmit={handleSubmit}>
+          <div className="form-intro">
+            <span className="form-step">01</span>
+            <div>
+              <h2>링크 만들기</h2>
+              <p>공유할 주소를 입력해 주세요.</p>
+            </div>
+          </div>
           <div className="label">
             <span>만들기 유형</span>
             <div className="retention-options" role="radiogroup" aria-label="만들기 유형 선택">
@@ -1168,6 +1175,13 @@ export default function HomePage() {
 
         {result ? (
           <section className="result-card" aria-live="polite">
+            <div className="result-card-heading">
+              <div>
+                <span className="section-kicker">완료</span>
+                <strong>새 단축링크가 준비됐어요</strong>
+              </div>
+              <span className="result-card-status">사용 가능</span>
+            </div>
             <div className="result-stack">
               <div className="result-row">
                 <a className="result-link" href={result.shortUrl} target="_blank" rel="noreferrer">
