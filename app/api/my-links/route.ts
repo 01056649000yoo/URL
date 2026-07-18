@@ -3,6 +3,7 @@ import { domainToUnicode } from "node:url";
 import { getOrCreateDeviceId, setDeviceCookie } from "@/lib/device-cookie";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBaseUrl } from "@/lib/site-url";
+import { getAccessibleLinkIds } from "@/lib/link-ownership";
 
 function toDisplayUrl(shortUrl: string) {
   try {
@@ -24,13 +25,14 @@ export async function GET(request: NextRequest) {
   try {
     const { deviceId } = getOrCreateDeviceId(request);
     const admin = createAdminClient();
+    const accessibleIds = await getAccessibleLinkIds(admin, deviceId);
 
     const { data, error } = await admin
       .from("short_links")
-      .select("slug, destination, expires_at, is_active, created_at")
-      .eq("created_by", deviceId)
+      .select("slug, destination, expires_at, is_active, created_at, bundle_items, display_label, created_by")
+      .in("id", accessibleIds.length ? accessibleIds : [-1])
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(1000);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -47,6 +49,9 @@ export async function GET(request: NextRequest) {
         expiresAt: link.expires_at,
         isActive: link.is_active,
         createdAt: link.created_at,
+        isBundle: Boolean(link.bundle_items),
+        label: link.display_label ?? undefined,
+        isOwner: link.created_by === deviceId,
       };
     });
 

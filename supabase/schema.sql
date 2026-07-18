@@ -16,6 +16,53 @@ add column if not exists expires_at timestamptz;
 alter table public.short_links
 add column if not exists bundle_items jsonb;
 
+alter table public.short_links
+add column if not exists display_label text;
+
+create table if not exists public.device_link_transfer_codes (
+  code_hash text primary key,
+  source_device_id text not null,
+  folder_state jsonb not null default '[]'::jsonb,
+  link_slugs text[] not null default '{}'::text[],
+  claimed_device_id text,
+  claimed_at timestamptz,
+  moved_count integer,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists device_link_transfer_codes_expires_at_idx
+on public.device_link_transfer_codes (expires_at);
+
+alter table public.device_link_transfer_codes enable row level security;
+
+create table if not exists public.short_link_device_access (
+  link_id bigint not null references public.short_links(id) on delete cascade,
+  device_id text not null,
+  granted_at timestamptz not null default timezone('utc', now()),
+  primary key (link_id, device_id)
+);
+
+create index if not exists short_link_device_access_device_idx
+on public.short_link_device_access(device_id, granted_at desc);
+
+alter table public.short_link_device_access enable row level security;
+
+insert into public.short_link_device_access(link_id, device_id)
+select id, created_by from public.short_links where created_by is not null
+on conflict do nothing;
+
+alter table public.device_link_transfer_codes
+add column if not exists folder_state jsonb not null default '[]'::jsonb;
+
+alter table public.device_link_transfer_codes
+add column if not exists link_slugs text[] not null default '{}'::text[];
+
+alter table public.device_link_transfer_codes
+add column if not exists claimed_device_id text,
+add column if not exists claimed_at timestamptz,
+add column if not exists moved_count integer;
+
 create index if not exists short_links_expires_at_idx
 on public.short_links (expires_at);
 
@@ -107,12 +154,7 @@ alter table public.page_visits enable row level security;
 alter table public.short_links enable row level security;
 
 drop policy if exists "allow public read active short links" on public.short_links;
-
-create policy "allow public read active short links"
-on public.short_links
-for select
-to anon
-using (is_active = true);
+revoke all on table public.short_links from anon, authenticated;
 
 create or replace function public.increment_click_count(link_id bigint)
 returns void
@@ -168,6 +210,108 @@ begin
   where day_utc < (timezone('utc', now()) - interval '90 days')::date;
 
   return deleted_count;
+end;
+$$;
+
+-- 관리자 수동 삭제는 만료 여부와 관계없이 선택한 링크를 즉시 완전 삭제합니다.
+-- 자동 정리의 30일 유예 규칙과 분리해 두 동작이 서로 영향을 주지 않게 합니다.
+create or replace function public.admin_delete_short_links(p_ids bigint[])
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  if p_ids is null or cardinality(p_ids) = 0 then
+    return 0;
+  end if;
+
+  delete from public.short_links
+  where id = any(p_ids);
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+create or replace function public.sync_original_link_device_access()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if new.created_by is not null then
+    insert into public.short_link_device_access(link_id, device_id)
+    values(new.id, new.created_by) on conflict do nothing;
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists short_links_device_access_trigger on public.short_links;
+create trigger short_links_device_access_trigger after insert on public.short_links
+for each row execute function public.sync_original_link_device_access();
+
+drop function if exists public.claim_device_link_transfer(text, text);
+
+create function public.claim_device_link_transfer(
+  p_code_hash text,
+  p_target_device_id text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  source_id text;
+  saved_folders jsonb;
+  saved_slugs text[];
+  claimed_id text;
+  saved_moved_count integer;
+  actual_moved_count integer;
+begin
+  delete from public.device_link_transfer_codes
+  where expires_at <= timezone('utc', now());
+
+  select source_device_id, folder_state, link_slugs, claimed_device_id, moved_count
+  into source_id, saved_folders, saved_slugs, claimed_id, saved_moved_count
+  from public.device_link_transfer_codes
+  where code_hash = p_code_hash
+    and expires_at > timezone('utc', now())
+  for update;
+
+  if source_id is null then
+    return jsonb_build_object('status', 'invalid', 'moved_count', 0, 'folders', '[]'::jsonb, 'moved_slugs', '[]'::jsonb);
+  end if;
+
+  if claimed_id is not null then
+    if claimed_id = p_target_device_id then
+      return jsonb_build_object('status', 'ok', 'moved_count', coalesce(saved_moved_count, 0), 'folders', coalesce(saved_folders, '[]'::jsonb), 'moved_slugs', to_jsonb(coalesce(saved_slugs, '{}'::text[])));
+    end if;
+    return jsonb_build_object('status', 'invalid', 'moved_count', 0, 'folders', '[]'::jsonb, 'moved_slugs', '[]'::jsonb);
+  end if;
+
+  if source_id = p_target_device_id then
+    return jsonb_build_object('status', 'same_device', 'moved_count', 0, 'folders', '[]'::jsonb, 'moved_slugs', '[]'::jsonb);
+  end if;
+
+  with inserted as (
+    insert into public.short_link_device_access(link_id, device_id)
+    select id, p_target_device_id from public.short_links
+    where created_by = source_id and slug = any(saved_slugs)
+    on conflict do nothing returning 1
+  ) select count(*) into actual_moved_count from inserted;
+
+  update public.device_link_transfer_codes
+  set claimed_device_id = p_target_device_id,
+      claimed_at = timezone('utc', now()),
+      moved_count = actual_moved_count
+  where code_hash = p_code_hash;
+  return jsonb_build_object(
+    'status', 'ok',
+    'moved_count', actual_moved_count,
+    'folders', coalesce(saved_folders, '[]'::jsonb),
+    'moved_slugs', to_jsonb(coalesce(saved_slugs, '{}'::text[]))
+  );
 end;
 $$;
 
@@ -476,9 +620,36 @@ after delete on public.short_links
 for each row execute function public.sync_short_link_stats();
 
 -- RPC는 앱 서버의 service_role만 호출합니다.
+create or replace function public.consume_admin_login_rate_limit(p_ip_hash text)
+returns table (allowed boolean, retry_after_seconds integer)
+language plpgsql security definer set search_path=public as $$
+declare
+  now_utc timestamptz := timezone('utc', now());
+  minute_start timestamptz; day_start timestamptz;
+  minute_count integer; day_count integer;
+begin
+  minute_start := timezone('utc', to_timestamp(floor(extract(epoch from now_utc) / 60) * 60));
+  day_start := timezone('utc', date_trunc('day', now_utc));
+  insert into public.short_link_rate_limits(ip_hash,bucket,window_start,request_count)
+  values(p_ip_hash,'admin-login-minute',minute_start,1)
+  on conflict(ip_hash,bucket,window_start) do update set request_count=public.short_link_rate_limits.request_count+1
+  returning request_count into minute_count;
+  insert into public.short_link_rate_limits(ip_hash,bucket,window_start,request_count)
+  values(p_ip_hash,'admin-login-day',day_start,1)
+  on conflict(ip_hash,bucket,window_start) do update set request_count=public.short_link_rate_limits.request_count+1
+  returning request_count into day_count;
+  allowed := minute_count <= 5 and day_count <= 30;
+  if minute_count > 5 then retry_after_seconds := greatest(60-mod(floor(extract(epoch from now_utc))::integer,60),1);
+  elsif day_count > 30 then retry_after_seconds := greatest(extract(epoch from ((day_start+interval '1 day')-now_utc))::integer,1);
+  else retry_after_seconds := 0; end if;
+  return next;
+end; $$;
+
 revoke execute on function public.increment_click_count(bigint) from public, anon, authenticated;
 revoke execute on function public.record_short_link_visit(bigint, text, text) from public, anon, authenticated;
 revoke execute on function public.delete_expired_short_links() from public, anon, authenticated;
+revoke execute on function public.admin_delete_short_links(bigint[]) from public, anon, authenticated;
+revoke execute on function public.claim_device_link_transfer(text, text) from public, anon, authenticated;
 revoke execute on function public.increment_deleted_short_links(integer) from public, anon, authenticated;
 revoke execute on function public.increment_created_short_links(integer) from public, anon, authenticated;
 revoke execute on function public.consume_short_link_rate_limit(text) from public, anon, authenticated;
@@ -490,9 +661,19 @@ revoke execute on function public.sync_short_link_stats() from public, anon, aut
 grant execute on function public.increment_click_count(bigint) to service_role;
 grant execute on function public.record_short_link_visit(bigint, text, text) to service_role;
 grant execute on function public.delete_expired_short_links() to service_role;
+grant execute on function public.admin_delete_short_links(bigint[]) to service_role;
+grant execute on function public.claim_device_link_transfer(text, text) to service_role;
+
+revoke all on table public.device_link_transfer_codes from public, anon, authenticated;
+grant all on table public.device_link_transfer_codes to service_role;
+revoke all on table public.short_link_device_access from public, anon, authenticated;
+grant all on table public.short_link_device_access to service_role;
+revoke execute on function public.sync_original_link_device_access() from public, anon, authenticated;
+revoke execute on function public.consume_admin_login_rate_limit(text) from public, anon, authenticated;
 grant execute on function public.increment_deleted_short_links(integer) to service_role;
 grant execute on function public.increment_created_short_links(integer) to service_role;
 grant execute on function public.consume_short_link_rate_limit(text) to service_role;
 grant execute on function public.consume_page_visit_rate_limit(text) to service_role;
 grant execute on function public.get_link_visit_stats(timestamptz, timestamptz, bigint) to service_role;
 grant execute on function public.get_global_visit_stats(timestamptz, timestamptz) to service_role;
+grant execute on function public.consume_admin_login_rate_limit(text) to service_role;

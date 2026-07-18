@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN_SESSION_COOKIE } from "@/lib/auth/admin";
+import { getRateLimitKey } from "@/lib/rate-limit";
 import { useSecureCookies } from "@/lib/site-url";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type LoginPayload = {
   email?: string;
@@ -23,6 +25,20 @@ export async function POST(request: Request) {
 
     if (!email || !password) {
       return NextResponse.json({ error: "이메일과 비밀번호를 입력해 주세요." }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    const { data: rateData, error: rateError } = await admin.rpc("consume_admin_login_rate_limit", {
+      p_ip_hash: `admin-login:${getRateLimitKey(request)}`,
+    });
+    if (rateError) throw rateError;
+    const rateLimit = Array.isArray(rateData) ? rateData[0] : rateData;
+    if (!rateLimit?.allowed) {
+      const waitSeconds = Math.max(Number(rateLimit?.retry_after_seconds ?? 60), 1);
+      return NextResponse.json(
+        { error: "로그인을 너무 자주 시도했습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(waitSeconds) } },
+      );
     }
 
     const supabase = createClient(url, anonKey, {

@@ -10,6 +10,7 @@ type CreateResult = {
   destination: string;
   expiresAt?: string;
   retentionPeriod?: string;
+  isBundle?: boolean;
 };
 
 type ErrorResult = {
@@ -43,6 +44,9 @@ type MyLink = {
   expiresAt?: string;
   isActive: boolean;
   createdAt: string;
+  isBundle?: boolean;
+  label?: string;
+  isOwner?: boolean;
 };
 
 type MyLinksResult = {
@@ -55,6 +59,7 @@ type RetentionPeriod = "day" | "week" | "month" | "quarter";
 const LAST_RESULT_KEY = "samlink-last-result";
 const MY_LINKS_KEY = "samlink-my-links";
 const MAX_SAVED_LINKS = 30;
+const LINK_FOLDERS_KEY = "samlink-link-folders";
 
 const BRAND_DOMAIN = "샘링크.kr";
 const PAGE_TITLE = "샘링크 | 수업링크를 짧고 간편하게, QR코드로 바로 접속";
@@ -73,6 +78,14 @@ type MergedLink = {
   expiresAt?: string | null;
   isActive?: boolean;
   sortAt?: string;
+  isBundle?: boolean;
+  isOwner?: boolean;
+};
+
+type LinkFolder = {
+  id: string;
+  name: string;
+  slugs: string[];
 };
 
 type SavedLinkStats = {
@@ -254,6 +267,32 @@ function writeSavedLinks(links: SavedLink[]) {
   window.localStorage.setItem(MY_LINKS_KEY, JSON.stringify(links.slice(0, MAX_SAVED_LINKS)));
 }
 
+function readLinkFolders() {
+  try {
+    const raw = window.localStorage.getItem(LINK_FOLDERS_KEY);
+    if (!raw) return [] as LinkFolder[];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [] as LinkFolder[];
+    return parsed
+      .filter((item): item is LinkFolder => {
+        if (!item || typeof item !== "object") return false;
+        const folder = item as Partial<LinkFolder>;
+        return typeof folder.id === "string" && typeof folder.name === "string" && Array.isArray(folder.slugs);
+      })
+      .map((folder) => ({
+        id: folder.id,
+        name: folder.name.trim().slice(0, 30) || "이름 없는 폴더",
+        slugs: folder.slugs.filter((slug): slug is string => typeof slug === "string"),
+      }));
+  } catch {
+    return [] as LinkFolder[];
+  }
+}
+
+function writeLinkFolders(folders: LinkFolder[]) {
+  window.localStorage.setItem(LINK_FOLDERS_KEY, JSON.stringify(folders));
+}
+
 // 목록에서 삭제한 링크는 서버 기록으로 다시 살아나지 않도록 슬러그를 따로 기억합니다.
 const HIDDEN_LINKS_KEY = "samlink-hidden-links";
 
@@ -295,7 +334,20 @@ export default function HomePage() {
   const [extendNotice, setExtendNotice] = useState("");
   const [myLinks, setMyLinks] = useState<MyLink[]>([]);
   const [isLoadingMyLinks, setIsLoadingMyLinks] = useState(false);
-  const [isMyLinksExpanded, setIsMyLinksExpanded] = useState(false);
+  const [linkFolders, setLinkFolders] = useState<LinkFolder[]>([]);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [draggedSlug, setDraggedSlug] = useState<string | null>(null);
+  const [folderNotice, setFolderNotice] = useState("");
+  const [expandedFolderIds, setExpandedFolderIds] = useState<string[]>([]);
+  const [pendingDeleteSlug, setPendingDeleteSlug] = useState<string | null>(null);
+  const [isDeletingLink, setIsDeletingLink] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [transferCode, setTransferCode] = useState("");
+  const [transferCodeExpiresAt, setTransferCodeExpiresAt] = useState("");
+  const [transferInput, setTransferInput] = useState("");
+  const [transferNotice, setTransferNotice] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [isTransferPanelOpen, setIsTransferPanelOpen] = useState(false);
   const [stats, setStats] = useState({
     totalCount: 0,
     createdCount: 0,
@@ -305,7 +357,7 @@ export default function HomePage() {
   });
 
   // 만들기 유형: 일반 단축 링크 또는 여러 주소를 묶은 링크 묶음(수업 세트)
-  const [createMode, setCreateMode] = useState<"single" | "bundle">("single");
+  const [createMode, setCreateMode] = useState<"single" | "bundle" | "manage">("single");
   const [customSlug, setCustomSlug] = useState("");
   const [bundleTitle, setBundleTitle] = useState("");
   const [bundleItems, setBundleItems] = useState<{ label: string; url: string }[]>([
@@ -360,16 +412,27 @@ export default function HomePage() {
 
         const container = pipWindow.document.createElement("div");
         container.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:16px;box-sizing:border-box;";
-        container.innerHTML = `
-          <div style="background:white;border-radius:16px;padding:12px;box-shadow:0 4px 16px rgba(79,108,251,0.08);border:1px solid rgba(79,108,251,0.12);display:flex;flex-direction:column;align-items:center;width:100%;height:100%;box-sizing:border-box;gap:8px;">
-            <div style="font-size:11px;font-weight:800;color:#4F46E5;flex-shrink:0;">🖥️ 샘링크 AOT</div>
-            <div style="flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;">
-              <img src="${qrImgUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" />
-            </div>
-            <div style="font-size:11px;font-weight:900;color:#214ad8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;flex-shrink:0;">${shortLabel}</div>
-            <div data-live-count style="font-size:11px;font-weight:800;color:#16a34a;flex-shrink:0;">👥 최근 5분 접속 확인 중...</div>
-          </div>
-        `;
+        const card = pipWindow.document.createElement("div");
+        card.style.cssText = "background:white;border-radius:16px;padding:12px;box-shadow:0 4px 16px rgba(79,108,251,0.08);border:1px solid rgba(79,108,251,0.12);display:flex;flex-direction:column;align-items:center;width:100%;height:100%;box-sizing:border-box;gap:8px;";
+        const title = pipWindow.document.createElement("div");
+        title.style.cssText = "font-size:11px;font-weight:800;color:#4F46E5;flex-shrink:0;";
+        title.textContent = "🖥️ 샘링크 AOT";
+        const imageBox = pipWindow.document.createElement("div");
+        imageBox.style.cssText = "flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;";
+        const qrImage = pipWindow.document.createElement("img");
+        qrImage.src = qrImgUrl;
+        qrImage.alt = "단축 링크 QR 코드";
+        qrImage.style.cssText = "width:100%;height:100%;object-fit:contain;border-radius:8px;";
+        imageBox.appendChild(qrImage);
+        const label = pipWindow.document.createElement("div");
+        label.style.cssText = "font-size:11px;font-weight:900;color:#214ad8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;flex-shrink:0;";
+        label.textContent = shortLabel;
+        const liveCount = pipWindow.document.createElement("div");
+        liveCount.dataset.liveCount = "true";
+        liveCount.style.cssText = "font-size:11px;font-weight:800;color:#16a34a;flex-shrink:0;";
+        liveCount.textContent = "👥 최근 5분 접속 확인 중...";
+        card.append(title, imageBox, label, liveCount);
+        container.appendChild(card);
         pipWindow.document.body.appendChild(container);
 
         // AOT 창에서도 실시간 입장 인원을 보여줍니다 (수업 중 확인용).
@@ -529,6 +592,7 @@ export default function HomePage() {
         label: link.label,
         expiresAt: link.expiresAt,
         sortAt: link.savedAt,
+        isBundle: link.isBundle,
       });
     }
 
@@ -537,6 +601,9 @@ export default function HomePage() {
       if (existing) {
         existing.expiresAt = link.expiresAt ?? existing.expiresAt;
         existing.isActive = link.isActive;
+        existing.isBundle = link.isBundle ?? existing.isBundle;
+        existing.label = existing.label ?? link.label;
+        existing.isOwner = link.isOwner;
       } else {
         map.set(link.slug, {
           slug: link.slug,
@@ -546,6 +613,9 @@ export default function HomePage() {
           expiresAt: link.expiresAt,
           isActive: link.isActive,
           sortAt: link.createdAt,
+          isBundle: link.isBundle,
+          label: link.label,
+          isOwner: link.isOwner,
         });
       }
     }
@@ -559,8 +629,22 @@ export default function HomePage() {
     );
   }, [savedLinks, myLinks, hiddenSlugs]);
 
-  const visibleLinks = isMyLinksExpanded ? mergedLinks : mergedLinks.slice(0, 4);
-  const hiddenLinkCount = Math.max(mergedLinks.length - visibleLinks.length, 0);
+  const selectedManagedLink = mergedLinks.find((link) => link.slug === selectedSavedSlug) ?? null;
+  const selectedIsOwner = selectedManagedLink?.isOwner !== false;
+
+  const creationModeLinks = createMode === "bundle"
+    ? mergedLinks.filter((link) => link.isBundle)
+    : mergedLinks.filter((link) => !link.isBundle);
+  const folderBySlug = new Map<string, string>();
+  for (const folder of linkFolders) {
+    for (const slug of folder.slugs) folderBySlug.set(slug, folder.id);
+  }
+  const unfiledLinks = mergedLinks.filter((link) => !folderBySlug.has(link.slug));
+
+  useEffect(() => {
+    setPendingDeleteSlug(null);
+    setDeleteError("");
+  }, [selectedSavedSlug]);
 
   async function loadMyLinks() {
     setIsLoadingMyLinks(true);
@@ -597,21 +681,40 @@ export default function HomePage() {
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(LAST_RESULT_KEY);
-      if (!saved) return;
-
-      const parsed = JSON.parse(saved) as CreateResult;
-      if (!parsed?.slug || !parsed?.shortUrl) return;
-      setResult(parsed);
+      if (saved) {
+        const parsed = JSON.parse(saved) as CreateResult;
+        if (parsed?.slug && parsed?.shortUrl) {
+          setResult(parsed);
+        } else {
+          window.localStorage.removeItem(LAST_RESULT_KEY);
+        }
+      }
     } catch {
       // 저장된 최근 링크가 없어도 정상입니다.
+      window.localStorage.removeItem(LAST_RESULT_KEY);
     }
 
+    // 최근 생성 결과가 없어도 보관함과 서버 목록은 항상 초기화해야 합니다.
     const links = readSavedLinks();
     setSavedLinks(links);
     writeSavedLinks(links);
     setHiddenSlugs(readHiddenSlugs());
+    setLinkFolders(readLinkFolders());
     void loadMyLinks();
   }, []);
+
+  useEffect(() => {
+    if (!mergedLinks.length || !linkFolders.length) return;
+    const availableSlugs = new Set(mergedLinks.map((link) => link.slug));
+    const cleaned = linkFolders.map((folder) => ({
+      ...folder,
+      slugs: folder.slugs.filter((slug) => availableSlugs.has(slug)),
+    }));
+    if (JSON.stringify(cleaned) !== JSON.stringify(linkFolders)) {
+      setLinkFolders(cleaned);
+      writeLinkFolders(cleaned);
+    }
+  }, [mergedLinks, linkFolders]);
 
   const qrImageUrl = useMemo(() => {
     if (!resultUrl) return "";
@@ -762,25 +865,30 @@ export default function HomePage() {
     let mounted = true;
 
     async function loadSavedLinkStats() {
-      const entries = await Promise.all(
+      const results = await Promise.all(
         savedLinks.map(async (link) => {
           try {
             const response = await fetch(`/api/link-stats/${encodeURIComponent(link.slug)}`);
             const data = (await response.json()) as LinkStatsResult;
-            if (!response.ok) return null;
+            // 삭제됐거나 다른 기기로 소유권이 이전된 링크는 이 브라우저의 관리 목록에서 제거합니다.
+            if (response.status === 404 || response.status === 403) {
+              return { slug: link.slug, deleted: true } as const;
+            }
+            if (!response.ok) return { slug: link.slug, deleted: false } as const;
 
-            return [
-              link.slug,
-              {
+            return {
+              slug: link.slug,
+              deleted: false,
+              stats: {
                 clickCount: data.clickCount ?? 0,
                 recentVisitors: data.recentVisitors ?? 0,
                 todayVisitors: data.todayVisitors ?? 0,
                 isActive: data.isActive,
                 expiresAt: data.expiresAt,
               },
-            ] as const;
+            } as const;
           } catch {
-            return null;
+            return { slug: link.slug, deleted: false } as const;
           }
         }),
       );
@@ -788,13 +896,18 @@ export default function HomePage() {
       if (!mounted) return;
 
       const nextStats: Record<string, SavedLinkStats> = {};
-      for (const entry of entries) {
-        if (!entry) continue;
-        nextStats[entry[0]] = entry[1];
+      const deletedSlugs = new Set<string>();
+      for (const item of results) {
+        if (item.deleted) {
+          deletedSlugs.add(item.slug);
+        } else if ("stats" in item && item.stats) {
+          nextStats[item.slug] = item.stats;
+        }
       }
       setSavedLinkStats(nextStats);
 
       const filteredLinks = savedLinks.filter((link) => {
+        if (deletedSlugs.has(link.slug)) return false;
         const statsForLink = nextStats[link.slug];
         if (statsForLink && statsForLink.isActive === false) return false;
         if (isPastGrace(statsForLink?.expiresAt ?? link.expiresAt)) return false;
@@ -804,6 +917,21 @@ export default function HomePage() {
       if (filteredLinks.length !== savedLinks.length) {
         setSavedLinks(filteredLinks);
         writeSavedLinks(filteredLinks);
+      }
+
+      if (deletedSlugs.size > 0) {
+        try {
+          const rawLastResult = window.localStorage.getItem(LAST_RESULT_KEY);
+          const lastResult = rawLastResult ? (JSON.parse(rawLastResult) as CreateResult) : null;
+          if (lastResult?.slug && deletedSlugs.has(lastResult.slug)) {
+            window.localStorage.removeItem(LAST_RESULT_KEY);
+            setResult((current) =>
+              current?.slug && deletedSlugs.has(current.slug) ? null : current,
+            );
+          }
+        } catch {
+          window.localStorage.removeItem(LAST_RESULT_KEY);
+        }
       }
     }
 
@@ -946,6 +1074,8 @@ export default function HomePage() {
         destination: link.destination,
         expiresAt: link.expiresAt ?? undefined,
         savedAt: new Date().toISOString(),
+        label: link.label,
+        isBundle: link.isBundle,
       };
       const merged = [adopted, ...savedLinks].slice(0, MAX_SAVED_LINKS);
       setSavedLinks(merged);
@@ -954,14 +1084,90 @@ export default function HomePage() {
     openSavedLink(link.slug);
   }
 
-  function saveLabel(slug: string) {
+  async function saveLabel(slug: string) {
     const label = labelDraft.trim().slice(0, 40);
+    const response = await fetch("/api/my-links/label", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, label }),
+    });
+    const data = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setExtendNotice(data.error ?? "별명을 저장하지 못했습니다.");
+      return;
+    }
     const updated = savedLinks.map((link) =>
       link.slug === slug ? { ...link, label: label || undefined } : link,
     );
     setSavedLinks(updated);
     writeSavedLinks(updated);
     setIsEditingLabel(false);
+  }
+
+  async function createTransferCode() {
+    const hasManagedLinks = myLinks.length > 0;
+    const hasOwnedLinks = myLinks.some((link) => link.isOwner === true);
+    if (hasManagedLinks && !hasOwnedLinks) {
+      setTransferCode("");
+      setTransferCodeExpiresAt("");
+      setTransferNotice("이 기기는 링크를 복사받은 기기라서 새 코드를 만들 수 없습니다. 보안을 위해 링크를 처음 만든 기기에서 코드를 만들어 주세요.");
+      return;
+    }
+
+    setIsTransferring(true);
+    setTransferNotice("");
+    try {
+      const response = await fetch("/api/my-links/transfer-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folders: linkFolders, excludedSlugs: hiddenSlugs }),
+      });
+      const data = (await response.json()) as { code?: string; expiresAt?: string; linkCount?: number; folderCount?: number; error?: string };
+      if (!response.ok || !data.code) throw new Error(data.error ?? "이전 코드를 만들지 못했습니다.");
+      setTransferCode(data.code);
+      setTransferCodeExpiresAt(data.expiresAt ?? "");
+      setTransferNotice(`${data.linkCount ?? 0}개 링크와 ${data.folderCount ?? 0}개 폴더를 옮길 준비가 됐습니다.`);
+    } catch (caught) {
+      setTransferNotice(caught instanceof Error ? caught.message : "이전 코드를 만들지 못했습니다.");
+    } finally {
+      setIsTransferring(false);
+    }
+  }
+
+  async function claimTransferCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsTransferring(true);
+    setTransferNotice("");
+    try {
+      const response = await fetch("/api/my-links/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: transferInput }),
+      });
+      const data = (await response.json()) as { movedCount?: number; folders?: LinkFolder[]; movedSlugs?: string[]; error?: string };
+      if (!response.ok) throw new Error(data.error ?? "링크를 옮기지 못했습니다.");
+      setTransferInput("");
+      await loadMyLinks();
+      const incomingFolders = Array.isArray(data.folders) ? data.folders : [];
+      const usedIds = new Set(linkFolders.map((folder) => folder.id));
+      const restoredFolders = incomingFolders.map((folder) => {
+        const id = usedIds.has(folder.id) ? crypto.randomUUID() : folder.id;
+        usedIds.add(id);
+        return { ...folder, id };
+      });
+      const nextFolders = [...linkFolders, ...restoredFolders];
+      setLinkFolders(nextFolders);
+      writeLinkFolders(nextFolders);
+      const movedSlugs = new Set(Array.isArray(data.movedSlugs) ? data.movedSlugs : []);
+      const nextHiddenSlugs = hiddenSlugs.filter((slug) => !movedSlugs.has(slug));
+      setHiddenSlugs(nextHiddenSlugs);
+      writeHiddenSlugs(nextHiddenSlugs);
+      setTransferNotice(`${data.movedCount ?? 0}개 링크와 ${restoredFolders.length}개 폴더를 이 브라우저로 옮겼습니다.`);
+    } catch (caught) {
+      setTransferNotice(caught instanceof Error ? caught.message : "링크를 옮기지 못했습니다.");
+    } finally {
+      setIsTransferring(false);
+    }
   }
 
   async function extendSavedLink(slug: string) {
@@ -1004,10 +1210,7 @@ export default function HomePage() {
     }
   }
 
-  function removeSavedLink(slug: string) {
-    const confirmed = window.confirm("이 링크를 내 목록에서 삭제할까요?");
-    if (!confirmed) return;
-
+  function removeSavedLinkLocally(slug: string) {
     const filtered = savedLinks.filter((link) => link.slug !== slug);
     setSavedLinks(filtered);
     writeSavedLinks(filtered);
@@ -1022,6 +1225,136 @@ export default function HomePage() {
       setResult(null);
       window.localStorage.removeItem(LAST_RESULT_KEY);
     }
+    setPendingDeleteSlug(null);
+  }
+
+  async function permanentlyDeleteSavedLink(slug: string) {
+    setIsDeletingLink(true);
+    setDeleteError("");
+    try {
+      const response = await fetch(`/api/my-links/${encodeURIComponent(slug)}`, {
+        method: "DELETE",
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "링크를 완전히 삭제하지 못했습니다.");
+      removeSavedLinkLocally(slug);
+      setMyLinks((current) => current.filter((link) => link.slug !== slug));
+    } catch (caught) {
+      setDeleteError(caught instanceof Error ? caught.message : "링크를 완전히 삭제하지 못했습니다.");
+    } finally {
+      setIsDeletingLink(false);
+    }
+  }
+
+  function createLinkFolder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newFolderName.trim().slice(0, 30);
+    if (!name) {
+      setFolderNotice("폴더 이름을 입력해 주세요.");
+      return;
+    }
+
+    const folderId = crypto.randomUUID();
+    const nextFolders = [
+      ...linkFolders,
+      { id: folderId, name, slugs: [] },
+    ];
+    setLinkFolders(nextFolders);
+    writeLinkFolders(nextFolders);
+    setNewFolderName("");
+    setExpandedFolderIds((current) => [...current, folderId]);
+    setFolderNotice(`‘${name}’ 폴더를 만들었습니다.`);
+  }
+
+  function toggleLinkFolder(folderId: string) {
+    setExpandedFolderIds((current) =>
+      current.includes(folderId)
+        ? current.filter((id) => id !== folderId)
+        : [...current, folderId],
+    );
+  }
+
+  function moveLinkToFolder(slug: string, folderId: string | null) {
+    const nextFolders = linkFolders.map((folder) => ({
+      ...folder,
+      slugs: folder.slugs.filter((savedSlug) => savedSlug !== slug),
+    }));
+    const destination = folderId
+      ? nextFolders.find((folder) => folder.id === folderId)
+      : null;
+    if (destination) destination.slugs.push(slug);
+    setLinkFolders(nextFolders);
+    writeLinkFolders(nextFolders);
+    setDraggedSlug(null);
+    setFolderNotice(destination ? `‘${destination.name}’ 폴더로 이동했습니다.` : "미분류로 이동했습니다.");
+  }
+
+  function renameLinkFolder(folder: LinkFolder) {
+    const name = window.prompt("새 폴더 이름을 입력해 주세요.", folder.name)?.trim().slice(0, 30);
+    if (!name || name === folder.name) return;
+    const nextFolders = linkFolders.map((item) =>
+      item.id === folder.id ? { ...item, name } : item,
+    );
+    setLinkFolders(nextFolders);
+    writeLinkFolders(nextFolders);
+  }
+
+  function deleteLinkFolder(folder: LinkFolder) {
+    if (!window.confirm(`‘${folder.name}’ 폴더를 삭제할까요?\n폴더 안 링크는 미분류로 이동합니다.`)) return;
+    const nextFolders = linkFolders.filter((item) => item.id !== folder.id);
+    setLinkFolders(nextFolders);
+    writeLinkFolders(nextFolders);
+    setExpandedFolderIds((current) => current.filter((id) => id !== folder.id));
+    setFolderNotice("폴더를 삭제하고 링크를 미분류로 이동했습니다.");
+  }
+
+  function renderManagedLink(link: MergedLink, allowDrag = true) {
+    const linkUrl = link.displayShortUrl ?? link.shortUrl;
+    const statsForLink = savedLinkStats[link.slug];
+    const effectiveExpiresAt = statsForLink?.expiresAt ?? link.expiresAt;
+    const linkExpired = isExpired(effectiveExpiresAt);
+    const isDisabled = link.isActive === false;
+    const expiryBadge = isDisabled || linkExpired ? null : getExpiryBadge(effectiveExpiresAt);
+
+    return (
+      <button
+        className={draggedSlug === link.slug ? "saved-link-item is-dragging" : "saved-link-item"}
+        type="button"
+        key={link.slug}
+        disabled={isDisabled}
+        draggable={allowDrag && !isDisabled}
+        onDragStart={allowDrag ? (event) => {
+          setDraggedSlug(link.slug);
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", link.slug);
+        } : undefined}
+        onDragEnd={allowDrag ? () => setDraggedSlug(null) : undefined}
+        onClick={() => openMergedLink(link)}
+      >
+        {allowDrag ? <div className="saved-link-drag-handle" aria-hidden="true">⋮⋮</div> : null}
+        <div className="saved-link-item-main">
+          <div className="saved-link-heading">
+            <span className={link.label ? "saved-link-title" : "saved-link-title is-empty"}>
+              {link.label || "별명 없음"}
+            </span>
+            {link.isBundle
+              ? <span className="link-kind-badge bundle">🗂️ 링크 묶음</span>
+              : <span className="link-kind-badge">🔗 일반 링크</span>}
+          </div>
+          <strong className="saved-link-url">{linkUrl}</strong>
+          <span className="saved-link-destination">{link.destination}</span>
+        </div>
+        <div className="saved-link-item-meta">
+          {isDisabled ? <span className="my-link-status">비활성</span> : null}
+          {!isDisabled && linkExpired ? (
+            <span className="expiry-badge urgent">만료 · {getGraceDaysLeft(effectiveExpiresAt)}일 내 복구 가능</span>
+          ) : null}
+          {expiryBadge ? <span className={expiryBadge.urgent ? "expiry-badge urgent" : "expiry-badge"}>⏳ {expiryBadge.text}</span> : null}
+          <span>클릭 {statsForLink?.clickCount ?? 0}</span>
+          <span>최근 5분 {statsForLink?.recentVisitors ?? 0}</span>
+        </div>
+      </button>
+    );
   }
 
   return (
@@ -1048,10 +1381,19 @@ export default function HomePage() {
               <span className="feature-brief-pill">브라우저 기반 링크 보관</span>
               <span className="feature-brief-pill">링크별 방문 통계 확인</span>
               <span className="feature-brief-pill">QR 코드 PiP 모드 지원</span>
+              <span className="feature-brief-pill">폴더별 링크 정리</span>
+              <span className="feature-brief-pill">다른 기기로 링크 복사</span>
             </div>
           </aside>
         </section>
 
+        <nav className="main-mode-tabs" aria-label="샘링크 기능 선택">
+          <button className={createMode === "single" ? "is-active" : ""} type="button" onClick={() => setCreateMode("single")}>🔗 일반 링크</button>
+          <button className={createMode === "bundle" ? "is-active" : ""} type="button" onClick={() => setCreateMode("bundle")}>🗂️ 링크 묶음</button>
+          <button className={createMode === "manage" ? "is-active" : ""} type="button" onClick={() => setCreateMode("manage")}>📁 링크 관리</button>
+        </nav>
+
+        {createMode !== "manage" ? (
         <form className="stack create-form" onSubmit={handleSubmit}>
           <div className="form-intro">
             <span className="form-step">01</span>
@@ -1060,32 +1402,6 @@ export default function HomePage() {
               <p>공유할 주소를 입력해 주세요.</p>
             </div>
           </div>
-          <div className="label">
-            <span>만들기 유형</span>
-            <div className="retention-options" role="radiogroup" aria-label="만들기 유형 선택">
-              <label className="retention-option">
-                <input
-                  type="radio"
-                  name="createMode"
-                  value="single"
-                  checked={createMode === "single"}
-                  onChange={() => setCreateMode("single")}
-                />
-                <span>일반 링크</span>
-              </label>
-              <label className="retention-option">
-                <input
-                  type="radio"
-                  name="createMode"
-                  value="bundle"
-                  checked={createMode === "bundle"}
-                  onChange={() => setCreateMode("bundle")}
-                />
-                <span>링크 묶음</span>
-              </label>
-            </div>
-          </div>
-
           {createMode === "single" ? (
             <label className="label">
               <span>원본 주소</span>
@@ -1224,8 +1540,9 @@ export default function HomePage() {
             생성 형식: {BRAND_DOMAIN}/코드4자 · 한글 이름도 가능 (예: {BRAND_DOMAIN}/3반과학)
           </p>
         </form>
+        ) : null}
 
-        {result ? (
+        {result && (createMode === "single" || (createMode === "bundle" && result.isBundle)) ? (
           <section className="result-card" aria-live="polite">
             <div className="result-card-heading">
               <div>
@@ -1286,66 +1603,127 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        {error ? <p className="error">{error}</p> : null}
+        {error && createMode !== "manage" ? <p className="error">{error}</p> : null}
 
-        <section className="result-card" aria-label="내 링크">
+        {createMode !== "manage" ? (
+          <section className="result-card quick-link-list" aria-label={createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}>
+            <div className="result-head">
+              <strong>{createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}</strong>
+              <span className="result-tip">
+                {createMode === "bundle"
+                  ? "이 브라우저에서 만든 링크 묶음만 보여줍니다."
+                  : "이 브라우저에서 만든 일반 링크만 보여줍니다."}
+              </span>
+            </div>
+            {creationModeLinks.length ? (
+              <div className="saved-links-list">
+                {creationModeLinks.map((link) => renderManagedLink(link, false))}
+              </div>
+            ) : isLoadingMyLinks ? (
+              <p className="empty-result">불러오는 중...</p>
+            ) : (
+              <p className="empty-result">
+                {createMode === "bundle"
+                  ? "아직 만든 링크 묶음이 없습니다. 위에서 링크 묶음을 만들어 보세요."
+                  : "아직 만든 링크가 없습니다. 위에서 단축링크를 만들면 여기에 보입니다."}
+              </p>
+            )}
+          </section>
+        ) : null}
+
+        {createMode === "manage" ? (
+        <section className="result-card link-management-card" aria-label="내 링크">
           <div className="result-head">
             <strong>내 링크</strong>
-            <span className="result-tip">이 브라우저에서 만든 링크입니다. 카드를 누르면 통계·QR·별명·만료 연장을 관리할 수 있어요.</span>
+            <span className="result-tip">이 브라우저에서 만든 링크입니다. 링크를 누르면 통계·QR·별명·만료 연장을 관리할 수 있어요.</span>
           </div>
 
-          {mergedLinks.length ? (
-            <div className="saved-links-list">
-              {visibleLinks.map((link) => {
-                const linkUrl = link.displayShortUrl ?? link.shortUrl;
-                const statsForLink = savedLinkStats[link.slug];
-                const effectiveExpiresAt = statsForLink?.expiresAt ?? link.expiresAt;
-                const linkExpired = isExpired(effectiveExpiresAt);
-                // 만료돼도 30일 유예 동안은 카드를 열어 복구할 수 있습니다. 비활성(관리자 차단)만 클릭 불가.
-                const isDisabled = link.isActive === false;
-                const expiryBadge =
-                  isDisabled || linkExpired ? null : getExpiryBadge(effectiveExpiresAt);
+          <form className="link-folder-create" onSubmit={createLinkFolder}>
+            <input
+              value={newFolderName}
+              onChange={(event) => setNewFolderName(event.target.value)}
+              maxLength={30}
+              placeholder="예: 3학년 국어, 학부모 안내"
+              aria-label="새 폴더 이름"
+            />
+            <button type="submit">+ 폴더 만들기</button>
+          </form>
+          <div className="link-folder-guide" aria-label="폴더 사용 방법">
+            <strong>📁 폴더로 링크를 정리해 보세요</strong>
+            <div>
+              <span><b>1</b> 수업·학년·용도별 폴더 만들기</span>
+              <span><b>2</b> 링크 카드의 ⋮⋮를 잡아 폴더로 드래그</span>
+              <span><b>3</b> 폴더 제목을 눌러 링크 펼쳐보기</span>
+            </div>
+            <p>일반 링크와 링크 묶음을 함께 정리할 수 있으며, 폴더 구성은 현재 브라우저에 저장됩니다.</p>
+          </div>
+          {folderNotice ? <p className="folder-notice">{folderNotice}</p> : null}
 
+          {mergedLinks.length || linkFolders.length ? (
+            <div className="link-folder-board">
+              {linkFolders.map((folder) => {
+                const folderLinks = mergedLinks.filter((link) => folder.slugs.includes(link.slug));
+                const isExpanded = expandedFolderIds.includes(folder.id);
                 return (
-                  <button
-                    className="saved-link-item"
-                    type="button"
-                    key={link.slug}
-                    disabled={isDisabled}
-                    onClick={() => openMergedLink(link)}
+                  <section
+                    className={draggedSlug ? "link-folder is-drop-ready" : "link-folder"}
+                    key={folder.id}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const slug = event.dataTransfer.getData("text/plain") || draggedSlug;
+                      if (slug) moveLinkToFolder(slug, folder.id);
+                    }}
                   >
-                    <div className="saved-link-item-main">
-                      {link.label ? <span className="saved-link-label">{link.label}</span> : null}
-                      <strong>{linkUrl}</strong>
-                      <span>{link.destination}</span>
+                    <div className="link-folder-head">
+                      <button
+                        className="link-folder-toggle"
+                        type="button"
+                        onClick={() => toggleLinkFolder(folder.id)}
+                        aria-expanded={isExpanded}
+                      >
+                        <span className="link-folder-icon">📁</span>
+                        <strong>{folder.name}</strong>
+                        <span>{folderLinks.length}개</span>
+                        <span className="link-folder-chevron" aria-hidden="true">{isExpanded ? "▲" : "▼"}</span>
+                      </button>
+                      <div className="link-folder-actions">
+                        <button type="button" onClick={() => renameLinkFolder(folder)}>이름 변경</button>
+                        <button type="button" onClick={() => deleteLinkFolder(folder)}>삭제</button>
+                      </div>
                     </div>
-                    <div className="saved-link-item-meta">
-                      {isDisabled ? <span className="my-link-status">비활성</span> : null}
-                      {!isDisabled && linkExpired ? (
-                        <span className="expiry-badge urgent">
-                          만료 · {getGraceDaysLeft(effectiveExpiresAt)}일 내 복구 가능
-                        </span>
-                      ) : null}
-                      {expiryBadge ? (
-                        <span className={expiryBadge.urgent ? "expiry-badge urgent" : "expiry-badge"}>
-                          ⏳ {expiryBadge.text}
-                        </span>
-                      ) : null}
-                      <span>클릭 {statsForLink?.clickCount ?? 0}</span>
-                      <span>최근 5분 {statsForLink?.recentVisitors ?? 0}</span>
-                    </div>
-                  </button>
+                    {isExpanded ? (
+                      <div className="saved-links-list">
+                        {folderLinks.length ? folderLinks.map((link) => renderManagedLink(link)) : (
+                          <p className="link-folder-empty">링크 카드를 이곳으로 드래그하세요.</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </section>
                 );
               })}
-              {hiddenLinkCount > 0 || isMyLinksExpanded ? (
-                <button
-                  className="my-links-toggle"
-                  type="button"
-                  onClick={() => setIsMyLinksExpanded((current) => !current)}
-                >
-                  {isMyLinksExpanded ? "접기" : `더 보기 ${hiddenLinkCount}개`}
-                </button>
-              ) : null}
+
+              <section
+                className={draggedSlug ? "link-folder link-folder-unfiled is-drop-ready" : "link-folder link-folder-unfiled"}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const slug = event.dataTransfer.getData("text/plain") || draggedSlug;
+                  if (slug) moveLinkToFolder(slug, null);
+                }}
+              >
+                <div className="link-folder-head">
+                  <div><span className="link-folder-icon">🗂️</span><strong>미분류</strong><span>{mergedLinks.filter((link) => !folderBySlug.has(link.slug)).length}개</span></div>
+                </div>
+                <div className="saved-links-list">
+                  {unfiledLinks.length ? unfiledLinks.map((link) => renderManagedLink(link)) : (
+                    <p className="link-folder-empty">정리되지 않은 링크가 없습니다.</p>
+                  )}
+                </div>
+              </section>
             </div>
           ) : isLoadingMyLinks ? (
             <p className="empty-result">불러오는 중...</p>
@@ -1355,6 +1733,41 @@ export default function HomePage() {
             </p>
           )}
         </section>
+        ) : null}
+
+        {createMode === "manage" ? (
+        <details
+          className="link-transfer-panel"
+          open={isTransferPanelOpen}
+          onToggle={(event) => setIsTransferPanelOpen(event.currentTarget.open)}
+        >
+          <summary>📱 다른 기기로 내 링크 옮기기</summary>
+          <div className="link-transfer-guide">
+            <table>
+              <tbody>
+                <tr><th>코드 만들기</th><td>링크를 처음 만든 기기에서 6자리 코드를 만듭니다.</td></tr>
+                <tr><th>코드 입력</th><td>10분 안에 새 기기 1대에서 한 번만 입력할 수 있습니다.</td></tr>
+                <tr><th>복사 결과</th><td>링크·별명·폴더가 새 기기에 추가되고, 원래 기기에도 그대로 남습니다.</td></tr>
+                <tr><th>다시 복사</th><td>가져온 링크는 다시 보낼 수 없지만, 이 기기에서 직접 만든 링크는 복사할 수 있습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="link-transfer-actions">
+            <button type="button" onClick={createTransferCode} disabled={isTransferring}>6자리 코드 만들기</button>
+            {transferCode ? (
+              <div className="link-transfer-code">
+                <strong>{transferCode}</strong>
+                <span>{transferCodeExpiresAt ? `${formatDateTime(transferCodeExpiresAt)}까지 · 1회 사용` : "10분간 유효"}</span>
+              </div>
+            ) : null}
+          </div>
+          <form className="link-transfer-claim" onSubmit={claimTransferCode}>
+            <input value={transferInput} onChange={(event) => setTransferInput(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" pattern="[0-9]{6}" placeholder="새 기기에서 6자리 코드 입력" aria-label="링크 이전 코드" />
+            <button type="submit" disabled={isTransferring || transferInput.length !== 6}>이 기기로 복사하기</button>
+          </form>
+          {transferNotice ? <p className="link-transfer-notice">{transferNotice}</p> : null}
+        </details>
+        ) : null}
 
         <p className="global-stats-line" aria-label="샘링크 통계">
           지금까지 <strong>{stats.createdCount.toLocaleString()}개</strong>의 단축 주소가 만들어졌고, 현재{" "}
@@ -1667,11 +2080,25 @@ export default function HomePage() {
               <button
                 className="mini-button danger"
                 type="button"
-                onClick={() => removeSavedLink(selectedSavedLink.slug)}
+                onClick={() => setPendingDeleteSlug(selectedSavedLink.slug)}
               >
                 삭제하기
               </button>
             </div>
+            {pendingDeleteSlug === selectedSavedLink.slug ? (
+              <div className="inline-delete-confirm" role="alert">
+                <span>{selectedIsOwner ? "이 링크를 DB에서도 완전히 삭제할까요? 삭제 후에는 복구할 수 없으며 같은 주소를 다시 만들 수 있습니다." : "복사해 온 링크를 이 기기의 관리 목록에서 제거할까요? 원본 링크와 다른 기기에는 영향이 없습니다."}</span>
+                <div>
+                  <button className="mini-button" type="button" disabled={isDeletingLink} onClick={() => setPendingDeleteSlug(null)}>
+                    취소
+                  </button>
+                  <button className="mini-button danger" type="button" disabled={isDeletingLink} onClick={() => permanentlyDeleteSavedLink(selectedSavedLink.slug)}>
+                    {isDeletingLink ? "처리 중..." : selectedIsOwner ? "완전 삭제" : "이 기기에서 제거"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {deleteError ? <p className="error">{deleteError}</p> : null}
           </div>
         </div>
       ) : null}

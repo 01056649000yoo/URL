@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 import { useSecureCookies } from "@/lib/site-url";
 
@@ -10,15 +10,45 @@ function createDeviceId() {
   return `device_${randomUUID()}`;
 }
 
-export function getOrCreateDeviceId(request: NextRequest) {
-  const existing = request.cookies.get(DEVICE_COOKIE_NAME)?.value?.trim();
+function cookieSecret() {
+  const secret = process.env.DEVICE_COOKIE_SECRET?.trim()
+    || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!secret) throw new Error("Device cookie signing secret is not configured.");
+  return secret;
+}
 
-  if (existing) {
+function signDeviceId(deviceId: string) {
+  return createHmac("sha256", cookieSecret()).update(deviceId).digest("base64url");
+}
+
+function encodeDeviceCookie(deviceId: string) {
+  return `v1.${deviceId}.${signDeviceId(deviceId)}`;
+}
+
+function readSignedDeviceId(value: string) {
+  const match = /^v1\.(device_[0-9a-f-]{36})\.([A-Za-z0-9_-]{43})$/.exec(value);
+  if (!match) return null;
+  const [, deviceId, signature] = match;
+  const expected = signDeviceId(deviceId);
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) return null;
+  return deviceId;
+}
+
+export function getOrCreateDeviceId(request: NextRequest) {
+  const existing = request.cookies.get(DEVICE_COOKIE_NAME)?.value?.trim() ?? "";
+  const signedDeviceId = readSignedDeviceId(existing);
+
+  if (signedDeviceId) {
     return {
-      deviceId: existing,
+      deviceId: signedDeviceId,
       isNew: false,
     };
   }
+
+  // 기존 브라우저의 UUID 쿠키는 권한을 유지한 채 다음 응답에서 서명 쿠키로 교체합니다.
+  if (/^device_[0-9a-f-]{36}$/.test(existing)) return { deviceId: existing, isNew: false };
 
   return {
     deviceId: createDeviceId(),
@@ -27,7 +57,7 @@ export function getOrCreateDeviceId(request: NextRequest) {
 }
 
 export function setDeviceCookie(response: NextResponse, deviceId: string) {
-  response.cookies.set(DEVICE_COOKIE_NAME, deviceId, {
+  response.cookies.set(DEVICE_COOKIE_NAME, encodeDeviceCookie(deviceId), {
     httpOnly: true,
     sameSite: "lax",
     secure: useSecureCookies(),

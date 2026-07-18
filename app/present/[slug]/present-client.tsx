@@ -16,6 +16,8 @@ export default function PresentClient({ slug }: { slug: string }) {
   const [recentVisitors, setRecentVisitors] = useState<number | null>(null);
   const [canSeeStats, setCanSeeStats] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [targetInput, setTargetInput] = useState("");
+  const [targetCount, setTargetCount] = useState<number | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -93,6 +95,15 @@ export default function PresentClient({ slug }: { slug: string }) {
     }
   }
 
+  function applyTargetCount() {
+    const value = Number.parseInt(targetInput, 10);
+    if (!Number.isInteger(value) || value < 1 || value > 999) return;
+    setTargetCount(value);
+    setTargetInput("");
+  }
+
+  const attendanceComplete = targetCount !== null && (recentVisitors ?? 0) >= targetCount;
+
   return (
     <main className="present-shell">
       <button className="present-fullscreen" type="button" onClick={toggleFullscreen}>
@@ -103,10 +114,22 @@ export default function PresentClient({ slug }: { slug: string }) {
         {qrSrc ? <img className="present-qr" src={qrSrc} alt={`${displayUrl} QR 코드`} /> : null}
         <p className="present-url">{displayUrl}</p>
         {canSeeStats ? (
-          <p className="present-counter" aria-live="polite">
-            <span className="present-counter-dot" aria-hidden="true" />
-            최근 5분 접속 <strong>{recentVisitors ?? 0}</strong>명
-          </p>
+          <>
+            <p className={attendanceComplete ? "present-counter is-complete" : "present-counter"} aria-live="polite">
+              <span className="present-counter-dot" aria-hidden="true" />
+              {targetCount ? (
+                <>{attendanceComplete ? "✅ 입장 완료 " : "접속 "}<strong>{recentVisitors ?? 0} / {targetCount}</strong>명</>
+              ) : (
+                <>최근 5분 접속 <strong>{recentVisitors ?? 0}</strong>명</>
+              )}
+            </p>
+            <div className="present-target-control">
+              <label htmlFor="present-target">목표 인원</label>
+              <input id="present-target" inputMode="numeric" pattern="[0-9]*" value={targetInput} placeholder="예: 28" onChange={(event) => setTargetInput(event.target.value.replace(/\D/g, "").slice(0, 3))} onKeyDown={(event) => { if (event.key === "Enter") applyTargetCount(); }} />
+              <button type="button" onClick={applyTargetCount}>적용</button>
+              {targetCount ? <button type="button" className="present-target-clear" onClick={() => setTargetCount(null)}>해제</button> : null}
+            </div>
+          </>
         ) : null}
         <p className="present-hint">휴대폰 카메라로 QR을 찍거나, 주소를 그대로 입력하세요</p>
       </section>

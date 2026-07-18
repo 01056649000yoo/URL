@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateDeviceId } from "@/lib/device-cookie";
 import { decodeSlugParam } from "@/lib/slug";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deviceCanManageLink } from "@/lib/link-ownership";
 
 type RouteContext = {
   params: Promise<{
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
     }
 
-    if (link.created_by !== deviceId) {
+    if (!(await deviceCanManageLink(admin, deviceId, link.id))) {
       return NextResponse.json({ error: "이 링크의 통계를 볼 권한이 없습니다." }, { status: 403 });
     }
 
