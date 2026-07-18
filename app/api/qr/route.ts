@@ -13,6 +13,8 @@ function sanitizeSize(value: string | null) {
 
 // 이 서비스가 임의 데이터 QR 생성기로 남용되지 않도록
 // 자체 단축 URL만 QR 생성 대상으로 허용합니다.
+// SITE_URL 외에 지금 접속 중인 호스트(localhost·내부 IP)도 자기 주소로 인정해
+// 맥미니 로컬 화면이나 LAN 접속에서도 QR이 나오도록 합니다.
 function isOwnShortUrl(data: string, request: Request) {
   let target: URL;
   try {
@@ -25,16 +27,26 @@ function isOwnShortUrl(data: string, request: Request) {
     return false;
   }
 
-  let siteHost: string;
+  const allowedHosts = new Set<string>();
   try {
-    siteHost = new URL(getBaseUrl(request)).hostname;
+    const siteHost = new URL(getBaseUrl(request)).hostname;
+    allowedHosts.add(domainToUnicode(siteHost) || siteHost);
   } catch {
+    // SITE_URL이 잘못돼도 요청 호스트 기준 검증은 계속합니다.
+  }
+  try {
+    const requestHost = new URL(request.url).hostname;
+    allowedHosts.add(domainToUnicode(requestHost) || requestHost);
+  } catch {
+    // 요청 URL 파싱 실패 시 SITE_URL 기준만 사용합니다.
+  }
+
+  if (!allowedHosts.size) {
     return false;
   }
 
   const targetHost = domainToUnicode(target.hostname) || target.hostname;
-  const allowedHost = domainToUnicode(siteHost) || siteHost;
-  return targetHost === allowedHost;
+  return allowedHosts.has(targetHost);
 }
 
 export async function GET(request: Request) {

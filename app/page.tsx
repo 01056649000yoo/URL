@@ -235,6 +235,24 @@ function writeSavedLinks(links: SavedLink[]) {
   window.localStorage.setItem(MY_LINKS_KEY, JSON.stringify(links.slice(0, MAX_SAVED_LINKS)));
 }
 
+// 목록에서 삭제한 링크는 서버 기록으로 다시 살아나지 않도록 슬러그를 따로 기억합니다.
+const HIDDEN_LINKS_KEY = "samlink-hidden-links";
+
+function readHiddenSlugs() {
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_LINKS_KEY);
+    if (!raw) return [] as string[];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [] as string[];
+  }
+}
+
+function writeHiddenSlugs(slugs: string[]) {
+  window.localStorage.setItem(HIDDEN_LINKS_KEY, JSON.stringify(slugs.slice(0, 100)));
+}
+
 export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
@@ -251,6 +269,7 @@ export default function HomePage() {
     todayVisitors: 0,
   });
   const [savedLinkStats, setSavedLinkStats] = useState<Record<string, SavedLinkStats>>({});
+  const [hiddenSlugs, setHiddenSlugs] = useState<string[]>([]);
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [labelDraft, setLabelDraft] = useState("");
   const [isExtending, setIsExtending] = useState(false);
@@ -512,10 +531,14 @@ export default function HomePage() {
       }
     }
 
+    for (const slug of hiddenSlugs) {
+      map.delete(slug);
+    }
+
     return Array.from(map.values()).sort(
       (a, b) => new Date(b.sortAt ?? 0).getTime() - new Date(a.sortAt ?? 0).getTime(),
     );
-  }, [savedLinks, myLinks]);
+  }, [savedLinks, myLinks, hiddenSlugs]);
 
   const visibleLinks = isMyLinksExpanded ? mergedLinks : mergedLinks.slice(0, 4);
   const hiddenLinkCount = Math.max(mergedLinks.length - visibleLinks.length, 0);
@@ -567,6 +590,7 @@ export default function HomePage() {
     const links = readSavedLinks();
     setSavedLinks(links);
     writeSavedLinks(links);
+    setHiddenSlugs(readHiddenSlugs());
     void loadMyLinks();
   }, []);
 
@@ -840,6 +864,11 @@ export default function HomePage() {
       ].slice(0, MAX_SAVED_LINKS);
       setSavedLinks(merged);
       writeSavedLinks(merged);
+      if (hiddenSlugs.includes(nextSaved.slug)) {
+        const nextHidden = hiddenSlugs.filter((slug) => slug !== nextSaved.slug);
+        setHiddenSlugs(nextHidden);
+        writeHiddenSlugs(nextHidden);
+      }
       window.localStorage.setItem(LAST_RESULT_KEY, JSON.stringify(data));
       await loadMyLinks();
       form.reset();
@@ -963,6 +992,10 @@ export default function HomePage() {
     const filtered = savedLinks.filter((link) => link.slug !== slug);
     setSavedLinks(filtered);
     writeSavedLinks(filtered);
+    // 서버 기록으로 목록에 다시 나타나지 않도록 숨김 목록에도 기억합니다.
+    const nextHidden = hiddenSlugs.includes(slug) ? hiddenSlugs : [...hiddenSlugs, slug];
+    setHiddenSlugs(nextHidden);
+    writeHiddenSlugs(nextHidden);
     if (selectedSavedSlug === slug) {
       setSelectedSavedSlug(null);
     }
