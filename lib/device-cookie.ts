@@ -57,10 +57,13 @@ export function getOrCreateDeviceId(request: NextRequest) {
 }
 
 export function setDeviceCookie(response: NextResponse, deviceId: string) {
+  const secure = useSecureCookies();
   response.cookies.set(DEVICE_COOKIE_NAME, encodeDeviceCookie(deviceId), {
     httpOnly: true,
-    sameSite: "lax",
-    secure: useSecureCookies(),
+    // 끄적끄적아지트.site의 수업 도구 iframe에서도 기기 소유 링크를 유지한다.
+    // 로컬 HTTP 개발에서는 Secure를 쓸 수 없으므로 기존 Lax 동작을 유지한다.
+    sameSite: secure ? "none" : "lax",
+    secure,
     path: "/",
     maxAge: COOKIE_MAX_AGE_SECONDS,
   });
