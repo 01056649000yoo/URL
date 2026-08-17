@@ -9,6 +9,12 @@ services:
     ports:
       - "127.0.0.1:3002:3000"
     restart: unless-stopped
+    # 2026-08-17: 호스트를 한 바퀴 도는 host.docker.internal:8000 대신 같은 도커 네트워크에서
+    # kong:8000 으로 직접 부른다. 그래야 supabase-kong 의 8000 포트를 바깥(0.0.0.0)에
+    # 열어 둘 이유가 사라진다.
+    networks:
+      - default
+      - supabase
 
   # Cloudflare Tunnel은 이 스택이 아니라 같은 Mac의 jarvis-tunnel(+jarvis-caddy)이 담당한다.
   # 경로: Cloudflare → jarvis-tunnel → jarvis-caddy(:8001) → host.docker.internal:3002 → app
@@ -34,3 +40,8 @@ services:
           sleep "$$CLEANUP_INTERVAL_SECONDS"
         done
     restart: unless-stopped
+
+networks:
+  supabase:
+    external: true
+    name: supabase_default
