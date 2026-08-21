@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
+  // 검색 노출을 위한 사이트 소유확인. 네이버는 Next 가 따로 다루지 않아 `other` 로 넣는다.
+  verification: {
+    other: {
+      "naver-site-verification": "a978f08b917cf7dc93d8b9edd235ae48957ca435",
+    },
+  },
 };
 
 export default function RootLayout({
