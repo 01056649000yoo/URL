@@ -7,6 +7,8 @@ supabase/.temp/
 .env
 .env.local
 .env.production
+.env*.bak-*
+docker-compose.yml.bak-*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

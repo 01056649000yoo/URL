@@ -14,6 +14,8 @@ services:
     # 열어 둘 이유가 사라진다.
     networks:
       - default
+      # 2026-08-28 샘링크를 아지트 스택으로 옮겼다. 자료는 아지트 DB 의 samlink 스키마에 있다.
+      - agit
       - supabase
 
   # Cloudflare Tunnel은 이 스택이 아니라 같은 Mac의 jarvis-tunnel(+jarvis-caddy)이 담당한다.
@@ -42,6 +44,9 @@ services:
     restart: unless-stopped
 
 networks:
+  agit:
+    external: true
+    name: agit_default
   supabase:
     external: true
     name: supabase_default
