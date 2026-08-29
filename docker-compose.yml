@@ -6,6 +6,15 @@ services:
     container_name: samlink-app
     env_file:
       - .env.local
+    user: "node"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1000,gid=1000,mode=1777
     ports:
       - "127.0.0.1:3002:3000"
     restart: unless-stopped

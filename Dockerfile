@@ -14,6 +14,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 RUN apk add --no-cache git
-COPY --from=builder /app ./
+RUN chown node:node /app
+COPY --chown=node:node --from=builder /app ./
 EXPOSE 3000
 CMD ["npm", "run", "start"]
