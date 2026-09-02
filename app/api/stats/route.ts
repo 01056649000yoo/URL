@@ -4,15 +4,29 @@ import { execSync } from "node:child_process";
 
 let cachedCommitHash: string | null = null;
 
+/*
+ * 커밋 해시는 빌드할 때 정해진다(2026-09-02).
+ *
+ * 예전에는 실행 중에 `git rev-parse` 를 불렀다. 그 한 줄 때문에 운영 이미지가 git 실행 파일과
+ * 저장소 이력 `.git`(2.9MB)을 통째로 들고 다녔다. 이제 `BUILD_COMMIT` 을 빌드 인자로 받아 두므로
+ * 실행 이미지에 git 도 `.git` 도 필요 없다.
+ * 로컬 개발(`next dev`)에서는 그 값이 없으므로 예전처럼 git 에게 물어본다.
+ */
 function getCommitHash() {
   if (cachedCommitHash !== null) {
+    return cachedCommitHash;
+  }
+
+  const fromBuild = process.env.BUILD_COMMIT?.trim();
+  if (fromBuild) {
+    cachedCommitHash = fromBuild;
     return cachedCommitHash;
   }
 
   try {
     cachedCommitHash = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
   } catch {
-    // Fallback if git CLI is not installed or not in a git repo
+    // git 이 없거나 저장소가 아닐 때(운영 이미지가 여기에 해당한다)
     cachedCommitHash = "unknown";
   }
 

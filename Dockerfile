@@ -13,7 +13,10 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-RUN apk add --no-cache git
+# 커밋 해시는 빌드할 때 새겨 넣는다. 예전에는 /api/stats 가 실행 중에 `git rev-parse` 를 불러
+# 운영 이미지에 git 과 저장소 이력 `.git` 을 함께 실어야 했다(2026-09-02 정리).
+ARG BUILD_COMMIT=unknown
+ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN chown node:node /app
 COPY --chown=node:node --from=builder /app ./
 # 실행 이미지에서 패키지 관리자를 걷어낸다 (2026-09-02).

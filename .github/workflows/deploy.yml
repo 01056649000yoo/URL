@@ -22,7 +22,9 @@ jobs:
         run: cp /Users/seunghyeonmaegmini/URL/.env.local .
 
       - name: Build docker image
-        run: docker compose --env-file .env.local build --no-cache
+        run: |
+          BUILD_COMMIT="$(git rev-parse --short HEAD)" \
+            docker compose --env-file .env.local build --no-cache
 
       - name: Restart docker stack
         run: docker compose --env-file .env.local up -d --remove-orphans

@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # 배포 워크플로가 현재 커밋 해시를 넣어 준다. 없으면 화면에 unknown 으로 보인다.
+        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
     container_name: samlink-app
     env_file:
       - .env.local
