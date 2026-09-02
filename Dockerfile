@@ -18,7 +18,10 @@ ENV PORT=3000
 ARG BUILD_COMMIT=unknown
 ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN chown node:node /app
-COPY --chown=node:node --from=builder /app ./
+# standalone 출력만 담는다 — 소스·개발 의존성·빌드 캐시는 실행에 필요 없다.
+COPY --chown=node:node --from=builder /app/public ./public
+COPY --chown=node:node --from=builder /app/.next/standalone ./
+COPY --chown=node:node --from=builder /app/.next/static ./.next/static
 # 실행 이미지에서 패키지 관리자를 걷어낸다 (2026-09-02).
 #
 # 왜: npm·yarn·corepack 은 빌드 단계에서만 쓰는데 node 베이스 이미지에 딸려 와 그대로 남아 있었다.
@@ -31,5 +34,6 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
            /opt/yarn-* /usr/local/bin/npm /usr/local/bin/npx \
            /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
+ENV HOSTNAME=0.0.0.0
 EXPOSE 3000
-CMD ["node", "node_modules/next/dist/bin/next", "start"]
+CMD ["node", "server.js"]
