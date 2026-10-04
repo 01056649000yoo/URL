@@ -35,7 +35,7 @@ services:
   # 그래서 .env.local 의 TRUST_PROXY_HEADERS=true 가 필요하다 (실제 방문자 IP 헤더 신뢰).
 
   cleanup:
-    image: curlimages/curl:8.12.1
+    image: curlimages/curl:8.22.0
     container_name: samlink-cleanup
     depends_on:
       - app
