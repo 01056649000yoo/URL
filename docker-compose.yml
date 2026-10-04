@@ -42,15 +42,28 @@ services:
     environment:
       CLEANUP_URL: http://app:3000/api/cleanup-expired
       CLEANUP_INTERVAL_SECONDS: "3600"
+      # 2026-10-04: 사용 중인 링크 목적지를 하루 한 번(24바퀴마다) Safe Browsing 으로 다시 검사한다.
+      RESCAN_URL: http://app:3000/api/rescan-links
+      RESCAN_EVERY_LOOPS: "24"
       CLEANUP_TOKEN: "${SHORTENER_ADMIN_TOKEN}"
     command:
       - sh
       - -c
       - |
+        # 앱이 먼저 뜨도록 잠깐 기다린다(전에는 첫 호출이 늘 연결 실패로 남았다).
+        sleep 60
+        loop=0
         while true; do
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer $$CLEANUP_TOKEN" \
             "$$CLEANUP_URL" || true
+          if [ $$((loop % RESCAN_EVERY_LOOPS)) -eq 0 ]; then
+            curl --fail --silent --show-error --max-time 120 -X POST \
+              -H "Authorization: Bearer $$CLEANUP_TOKEN" \
+              "$$RESCAN_URL" || true
+            echo
+          fi
+          loop=$$((loop + 1))
           sleep "$$CLEANUP_INTERVAL_SECONDS"
         done
     restart: unless-stopped
