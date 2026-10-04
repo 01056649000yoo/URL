@@ -41,6 +41,13 @@ export async function POST(request: Request) {
       );
     }
 
+    // 관리자 이메일이 아니면 비밀번호를 확인하지 않는다(2026-10-04 보안 점검).
+    // 로그인 서버가 아지트와 같아서, 그대로 두면 아지트 사용자(학생 포함) 비밀번호가 맞는지 알려 주는 창이 된다.
+    // 답은 비밀번호가 틀렸을 때와 똑같이 해서 관리자 이메일도 드러내지 않는다.
+    if (email !== adminEmail) {
+      return NextResponse.json({ error: "이메일 또는 비밀번호가 올바르지 않습니다." }, { status: 401 });
+    }
+
     const supabase = createClient(url, anonKey, {
     // 2026-08-28 샘링크를 아지트 스택으로 옮겼다. 자료는 아지트 DB 의 `samlink` 스키마에 있다.
     // 여기서 한 번 지정하면 `.from(...)`·`.rpc(...)` 호출부는 고치지 않아도 된다.
