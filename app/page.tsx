@@ -1786,7 +1786,12 @@ export default function HomePage() {
         <nav className="partner-links" aria-label="연결 사이트">
           <span className="partner-links-kicker">연결 사이트</span>
           <a href="https://끄적끄적아지트.site" target="_blank" rel="noreferrer">
-            끄적끄적아지트 <span>초등 글쓰기 지도 플랫폼</span>
+            <span className="partner-link-icon" aria-hidden="true">✏️</span>
+            <span className="partner-link-text">
+              <strong>끄적끄적아지트</strong>
+              <small>초등 글쓰기 지도 플랫폼</small>
+            </span>
+            <span className="partner-link-arrow" aria-hidden="true">↗</span>
           </a>
         </nav>
       </section>
