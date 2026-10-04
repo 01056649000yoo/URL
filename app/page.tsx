@@ -1786,10 +1786,7 @@ export default function HomePage() {
         <nav className="partner-links" aria-label="연결 사이트">
           <span className="partner-links-kicker">연결 사이트</span>
           <a href="https://끄적끄적아지트.site" target="_blank" rel="noreferrer">
-            끄적끄적아지트 <span>초등 글쓰기 통합 플랫폼</span>
-          </a>
-          <a href="https://survival.xn--vz0ba242ncqcba79xhwx.site/" target="_blank" rel="noreferrer">
-            문해력 서바이벌 <span>자리·역할배치 기반 문해력 활동</span>
+            끄적끄적아지트 <span>초등 글쓰기 지도 플랫폼</span>
           </a>
         </nav>
       </section>
