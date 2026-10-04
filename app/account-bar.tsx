@@ -22,13 +22,17 @@ export async function connectWithTicket(ticket: string) {
   return data;
 }
 
-export function AccountBar({ isEmbedded, onChanged }: { isEmbedded: boolean; onChanged: () => void }) {
+export function AccountBar({ isEmbedded, onChanged, onStatus }: { isEmbedded: boolean; onChanged: () => void; onStatus?: (connected: boolean) => void }) {
   const [account, setAccount] = useState<AccountState | null>(null);
   const [notice, setNotice] = useState("");
   const askedParent = useRef(false);
   // 부모 화면이 다시 그려질 때마다 함수가 바뀌어도 연결 대기(메시지 리스너)가 풀리지 않게 ref 로 든다.
   const onChangedRef = useRef(onChanged);
   useEffect(() => { onChangedRef.current = onChanged; }, [onChanged]);
+  const onStatusRef = useRef(onStatus);
+  useEffect(() => { onStatusRef.current = onStatus; }, [onStatus]);
+  // 목록 안내 문구(이 브라우저에만 / 계정에)를 바꿀 수 있게 연결 상태를 알려 준다.
+  useEffect(() => { if (account) onStatusRef.current?.(account.connected); }, [account]);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,8 +80,8 @@ export function AccountBar({ isEmbedded, onChanged }: { isEmbedded: boolean; onC
       <div className="account-bar is-connected" role="status">
         <span className="account-bar-icon" aria-hidden="true">✅</span>
         <span className="account-bar-text">
-          <strong>아지트 {account.displayName} 계정에 연결됨</strong>
-          <small>어느 기기에서 연결해도 같은 링크 목록이 보여요.</small>
+          <strong>아지트 {account.displayName} 계정에 저장 중</strong>
+          <small>다른 컴퓨터에서도 아지트 계정으로 연결하면 같은 링크 목록이 그대로 보여요.</small>
         </span>
         {!isEmbedded ? (
           <button type="button" className="account-bar-action is-quiet" onClick={disconnect}>연결 해제</button>
@@ -93,8 +97,8 @@ export function AccountBar({ isEmbedded, onChanged }: { isEmbedded: boolean; onC
     <div className="account-bar">
       <span className="account-bar-icon" aria-hidden="true">✏️</span>
       <span className="account-bar-text">
-        <strong>끄적끄적아지트 선생님이신가요?</strong>
-        <small>{notice || "계정으로 연결하면 컴퓨터를 바꿔도 내 링크 목록이 그대로 남아요."}</small>
+        <strong>지금은 내 링크가 이 브라우저에만 저장돼요</strong>
+        <small>{notice || "다른 컴퓨터나 브라우저에서는 보이지 않고, 쿠키를 지우면 사라져요. 끄적끄적아지트 선생님 계정으로 연결하면 어디서든 내 링크가 그대로 보여요."}</small>
       </span>
       <a className="account-bar-action" href={AGIT_CONNECT_URL}>아지트 계정으로 연결</a>
     </div>

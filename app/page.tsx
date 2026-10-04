@@ -314,6 +314,7 @@ function writeHiddenSlugs(slugs: string[]) {
 
 export default function HomePage() {
   const [isEmbedded, setIsEmbedded] = useState(false);
+  const [isAccountConnected, setIsAccountConnected] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
   const [error, setError] = useState("");
@@ -1637,7 +1638,7 @@ export default function HomePage() {
 
         {error && createMode !== "manage" ? <p className="error">{error}</p> : null}
 
-        <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} />
+        <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} onStatus={setIsAccountConnected} />
 
         {createMode !== "manage" ? (
           <section className="result-card quick-link-list" aria-label={createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}>
@@ -1645,8 +1646,8 @@ export default function HomePage() {
               <strong>{createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}</strong>
               <span className="result-tip">
                 {createMode === "bundle"
-                  ? "이 브라우저에서 만든 링크 묶음만 보여줍니다."
-                  : "이 브라우저에서 만든 일반 링크만 보여줍니다."}
+                  ? (isAccountConnected ? "아지트 계정에 저장된 링크 묶음을 보여줍니다." : "이 브라우저에서 만든 링크 묶음만 보여줍니다.")
+                  : (isAccountConnected ? "아지트 계정에 저장된 일반 링크를 보여줍니다." : "이 브라우저에서 만든 일반 링크만 보여줍니다.")}
               </span>
             </div>
             {creationModeLinks.length ? (
@@ -1669,7 +1670,7 @@ export default function HomePage() {
         <section className="result-card link-management-card" aria-label="내 링크">
           <div className="result-head">
             <strong>내 링크</strong>
-            <span className="result-tip">이 브라우저에서 만든 링크입니다. 링크를 누르면 통계·QR·별명·만료 연장을 관리할 수 있어요.</span>
+            <span className="result-tip">{isAccountConnected ? "아지트 계정에 저장된 링크입니다." : "이 브라우저에 저장된 링크입니다."} 링크를 누르면 통계·QR·별명·만료 연장을 관리할 수 있어요.</span>
           </div>
 
           <form className="link-folder-create" onSubmit={createLinkFolder}>
