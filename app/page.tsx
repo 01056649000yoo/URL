@@ -1383,6 +1383,7 @@ export default function HomePage() {
           <aside className="feature-brief" aria-label="샘링크 기능 안내">
             <div className="feature-brief-list">
               <span className="feature-brief-pill">단축 링크·QR 즉시 생성</span>
+              <span className="feature-brief-pill">여러 링크를 주소 하나로</span>
               <span className="feature-brief-pill">브라우저 기반 링크 보관</span>
               <span className="feature-brief-pill">링크별 방문 통계 확인</span>
               <span className="feature-brief-pill">QR 코드 PiP 모드 지원</span>
@@ -1393,9 +1394,18 @@ export default function HomePage() {
         </section>
 
         <nav className="main-mode-tabs" aria-label="샘링크 기능 선택">
-          <button className={createMode === "single" ? "is-active" : ""} type="button" onClick={() => setCreateMode("single")}>🔗 일반 링크</button>
-          <button className={createMode === "bundle" ? "is-active" : ""} type="button" onClick={() => setCreateMode("bundle")}>🗂️ 링크 묶음</button>
-          <button className={createMode === "manage" ? "is-active" : ""} type="button" onClick={() => setCreateMode("manage")}>📁 링크 관리</button>
+          <button className={createMode === "single" ? "is-active" : ""} type="button" onClick={() => setCreateMode("single")}>
+            <span className="mode-tab-title">🔗 일반 링크</span>
+            <span className="mode-tab-desc">주소 1개를 짧게</span>
+          </button>
+          <button className={createMode === "bundle" ? "is-active" : ""} type="button" onClick={() => setCreateMode("bundle")}>
+            <span className="mode-tab-title">🗂️ 링크 묶음</span>
+            <span className="mode-tab-desc">여러 주소를 하나로</span>
+          </button>
+          <button className={createMode === "manage" ? "is-active" : ""} type="button" onClick={() => setCreateMode("manage")}>
+            <span className="mode-tab-title">📁 링크 관리</span>
+            <span className="mode-tab-desc">만든 링크 보기·정리</span>
+          </button>
         </nav>
 
         {createMode !== "manage" ? (
@@ -1403,8 +1413,17 @@ export default function HomePage() {
           <div className="form-intro">
             <span className="form-step">01</span>
             <div>
-              <h2>링크 만들기</h2>
-              <p>공유할 주소를 입력해 주세요.</p>
+              {createMode === "bundle" ? (
+                <>
+                  <h2>링크 묶음 만들기</h2>
+                  <p>활동지·영상·패들렛처럼 여러 주소를 짧은 주소 하나에 담아 보내요.</p>
+                </>
+              ) : (
+                <>
+                  <h2>링크 만들기</h2>
+                  <p>긴 주소 하나를 짧은 주소와 QR로 바꿔요.</p>
+                </>
+              )}
             </div>
           </div>
           {createMode === "single" ? (
@@ -1422,7 +1441,7 @@ export default function HomePage() {
             <div className="label">
               <span>묶을 링크들</span>
               <p className="bundle-editor-hint">
-                하나의 짧은 주소로 여러 링크를 함께 전달합니다. 학생은 버튼 목록에서 골라 이동해요.
+                학생이 짧은 주소로 들어오면 아래에 적은 이름이 버튼으로 나와요. 예) 샘링크.kr/3반과학 → [활동지] [영상] [패들렛]
               </p>
               <input
                 className="field"
@@ -1544,6 +1563,13 @@ export default function HomePage() {
           <p className="form-hint">
             생성 형식: {BRAND_DOMAIN}/코드4자 · 한글 이름도 가능 (예: {BRAND_DOMAIN}/3반과학)
           </p>
+          {createMode === "single" ? (
+            <button className="bundle-nudge" type="button" onClick={() => setCreateMode("bundle")}>
+              <span aria-hidden="true">🗂️</span>
+              <span>보낼 링크가 여러 개인가요? <strong>링크 묶음</strong>으로 주소 하나에 담아 보내 보세요</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          ) : null}
         </form>
         ) : null}
 
