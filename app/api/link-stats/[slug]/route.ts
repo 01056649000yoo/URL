@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateDeviceId } from "@/lib/device-cookie";
+import { getViewer } from "@/lib/account-session";
 import { decodeSlugParam } from "@/lib/slug";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deviceCanManageLink } from "@/lib/link-ownership";
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { slug: rawSlug } = await context.params;
     const slug = decodeSlugParam(rawSlug);
-    const { deviceId } = getOrCreateDeviceId(request);
+    const viewer = getViewer(request);
     const admin = createAdminClient();
     const recentThresholdIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const today = new Date();
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
     }
 
-    if (!(await deviceCanManageLink(admin, deviceId, link.id))) {
+    if (!(await deviceCanManageLink(admin, viewer, link))) {
       return NextResponse.json({ error: "이 링크의 통계를 볼 권한이 없습니다." }, { status: 403 });
     }
 

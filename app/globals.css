@@ -2204,3 +2204,59 @@ textarea {
   color: var(--muted);
   font-size: clamp(0.85rem, 1.8vw, 1.1rem);
 }
+
+/* 아지트 선생님 계정 연결 표시줄(2026-10-05) */
+.account-bar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(79, 108, 251, 0.18);
+  background: #f4f6ff;
+}
+
+.account-bar.is-connected {
+  border-color: rgba(23, 106, 87, 0.22);
+  background: #eefaf5;
+}
+
+.account-bar-icon { flex: none; font-size: 1.3rem; }
+
+.account-bar-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.account-bar-text strong { color: var(--text); font-size: 0.98rem; }
+.account-bar-text small { color: var(--muted); font-size: 0.86rem; font-weight: 600; }
+
+.account-bar-action {
+  flex: none;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--brand);
+  color: #fff;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.account-bar-action.is-quiet {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 480px) {
+  .account-bar { flex-wrap: wrap; }
+  .account-bar-action { width: 100%; text-align: center; }
+}

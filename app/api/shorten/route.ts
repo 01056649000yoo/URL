@@ -3,6 +3,8 @@ import { domainToUnicode } from "node:url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOrCreateDeviceId, setDeviceCookie } from "@/lib/device-cookie";
 import { generateSlug, isReservedSlug, normalizeSlug } from "@/lib/slug";
+import { readAccountSession } from "@/lib/account-session";
+import { grantAccountAccess } from "@/lib/link-ownership";
 import { getDeviceRateLimitKey, getRateLimitKey } from "@/lib/rate-limit";
 import { checkUrlsSafety, describeThreat } from "@/lib/safe-browsing";
 import { getBaseUrl } from "@/lib/site-url";
@@ -208,7 +210,7 @@ export async function POST(request: NextRequest) {
 
     // 자동 생성 슬러그는 충돌 시 재시도하고, 반복 충돌하면 길이를 늘려 확률을 낮춥니다.
     const maxAttempts = suppliedSlug ? 1 : 5;
-    let data: { slug: string; destination: string; expires_at: string | null } | null = null;
+    let data: { id: number; slug: string; destination: string; expires_at: string | null } | null = null;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       // 묶음 링크는 자체 목록 페이지(/b/슬러그)를 목적지로 사용해
@@ -226,7 +228,7 @@ export async function POST(request: NextRequest) {
           expires_at: expiresAt,
           ...(isBundle ? { bundle_items: bundlePayload } : {}),
         })
-        .select("slug, destination, expires_at")
+        .select("id, slug, destination, expires_at")
         .single();
 
       if (!error) {
@@ -257,6 +259,16 @@ export async function POST(request: NextRequest) {
         { error: "짧은 주소 생성에 실패했습니다. 잠시 후 다시 시도해 주세요." },
         { status: 500 },
       );
+    }
+
+    // 아지트 계정에 연결돼 있으면 계정 목록에도 넣는다(다른 기기에서도 보이게, 2026-10-05).
+    const account = readAccountSession(request);
+    if (account) {
+      try {
+        await grantAccountAccess(admin, account.userId, [{ id: data.id, isOwner: true }]);
+      } catch {
+        // 계정 목록에 못 넣어도 링크 만들기는 성공으로 둔다(이 기기 목록에는 있다).
+      }
     }
 
     const shortUrl = `${baseUrl}/${encodeURIComponent(data.slug)}`;

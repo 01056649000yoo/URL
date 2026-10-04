@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { AccountBar } from "./account-bar";
 
 type CreateResult = {
   shortUrl: string;
@@ -1635,6 +1636,8 @@ export default function HomePage() {
         ) : null}
 
         {error && createMode !== "manage" ? <p className="error">{error}</p> : null}
+
+        <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} />
 
         {createMode !== "manage" ? (
           <section className="result-card quick-link-list" aria-label={createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}>

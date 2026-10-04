@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { domainToUnicode } from "node:url";
-import { getOrCreateDeviceId, setDeviceCookie } from "@/lib/device-cookie";
+import { setDeviceCookie } from "@/lib/device-cookie";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBaseUrl } from "@/lib/site-url";
-import { getAccessibleLinkIds } from "@/lib/link-ownership";
+import { getAccessibleLinkIds, getAccountAccess } from "@/lib/link-ownership";
+import { getViewer } from "@/lib/account-session";
 
 function toDisplayUrl(shortUrl: string) {
   try {
@@ -23,13 +24,15 @@ function toDisplayUrl(shortUrl: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { deviceId } = getOrCreateDeviceId(request);
+    const viewer = getViewer(request);
+    const { deviceId } = viewer;
     const admin = createAdminClient();
-    const accessibleIds = await getAccessibleLinkIds(admin, deviceId);
+    const accessibleIds = await getAccessibleLinkIds(admin, viewer);
+    const accountAccess = await getAccountAccess(admin, viewer.userId);
 
     const { data, error } = await admin
       .from("short_links")
-      .select("slug, destination, expires_at, is_active, created_at, bundle_items, display_label, created_by")
+      .select("id, slug, destination, expires_at, is_active, created_at, bundle_items, display_label, created_by")
       .in("id", accessibleIds.length ? accessibleIds : [-1])
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -51,7 +54,7 @@ export async function GET(request: NextRequest) {
         createdAt: link.created_at,
         isBundle: Boolean(link.bundle_items),
         label: link.display_label ?? undefined,
-        isOwner: link.created_by === deviceId,
+        isOwner: link.created_by === deviceId || accountAccess.get(link.id) === true,
       };
     });
 

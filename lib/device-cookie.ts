@@ -10,7 +10,7 @@ function createDeviceId() {
   return `device_${randomUUID()}`;
 }
 
-function cookieSecret() {
+export function cookieSecret() {
   const secret = process.env.DEVICE_COOKIE_SECRET?.trim()
     || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!secret) throw new Error("Device cookie signing secret is not configured.");

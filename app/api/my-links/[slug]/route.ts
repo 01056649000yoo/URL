@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateDeviceId } from "@/lib/device-cookie";
+import { getViewer } from "@/lib/account-session";
 import { decodeSlugParam } from "@/lib/slug";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { deviceCanManageLink } from "@/lib/link-ownership";
+import { getLinkAccess, removeLinkAccess } from "@/lib/link-ownership";
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
@@ -10,8 +10,8 @@ type RouteContext = {
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const { deviceId, isNew } = getOrCreateDeviceId(request);
-    if (isNew) {
+    const viewer = getViewer(request);
+    if (viewer.isNewDevice && !viewer.userId) {
       return NextResponse.json({ error: "이 브라우저에서 만든 링크만 삭제할 수 있습니다." }, { status: 403 });
     }
 
@@ -21,13 +21,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { data: link, error: findError } = await admin
       .from("short_links").select("id, created_by").eq("slug", slug).maybeSingle();
     if (findError) throw findError;
-    if (!link || !(await deviceCanManageLink(admin, deviceId, link.id))) {
+    const access = link ? await getLinkAccess(admin, viewer, link) : null;
+    if (!link || !access?.canManage) {
       return NextResponse.json({ error: "이 링크를 관리할 권한이 없습니다." }, { status: 403 });
     }
-    if (link.created_by !== deviceId) {
-      const { error: accessError } = await admin.from("short_link_device_access")
-        .delete().eq("link_id", link.id).eq("device_id", deviceId);
-      if (accessError) throw accessError;
+    if (!access.isOwner) {
+      await removeLinkAccess(admin, viewer, link.id);
       return NextResponse.json({ deleted: false, removedAccess: true, slug });
     }
     const { data, error } = await admin

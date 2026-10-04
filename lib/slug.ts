@@ -11,6 +11,7 @@ const RESERVED_SLUGS = new Set([
   "b",
   "present",
   "expired",
+  "connect",
   "_next",
   "assets",
   "public",

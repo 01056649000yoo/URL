@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getOrCreateDeviceId, setDeviceCookie } from "@/lib/device-cookie";
+import { setDeviceCookie } from "@/lib/device-cookie";
+import { getViewer } from "@/lib/account-session";
 import { deviceCanManageLink } from "@/lib/link-ownership";
 
 type ExtendPayload = {
@@ -21,8 +22,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "연장할 링크를 찾을 수 없습니다." }, { status: 400 });
     }
 
-    const { deviceId, isNew } = getOrCreateDeviceId(request);
-    if (isNew) {
+    const viewer = getViewer(request);
+    const { deviceId } = viewer;
+    if (viewer.isNewDevice && !viewer.userId) {
       return NextResponse.json(
         { error: "이 브라우저에서 만든 링크만 연장할 수 있습니다." },
         { status: 403 },
@@ -40,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
     }
 
-    if (!(await deviceCanManageLink(admin, deviceId, link.id))) {
+    if (!(await deviceCanManageLink(admin, viewer, link))) {
       return NextResponse.json(
         { error: "이 브라우저에서 만든 링크만 연장할 수 있습니다." },
         { status: 403 },
