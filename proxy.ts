@@ -26,10 +26,15 @@ function allowedOrigins(request: NextRequest) {
 export function isCrossSiteRequest(request: NextRequest) {
   if (SAFE_METHODS.has(request.method)) return false;
 
+  // 브라우저가 스스로 붙이는 Sec-Fetch-Site 가 same-origin 이면 샘링크 화면에서 보낸 요청이 확실하다.
+  // (개인정보 보호 설정·확장 프로그램 등으로 Origin 이 "null" 이 되거나 주소 표기가 달라도 막지 않는다.)
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite === "same-origin") return false;
+
   const origin = request.headers.get("origin");
   if (origin) return !allowedOrigins(request).has(origin);
 
-  return request.headers.get("sec-fetch-site") === "cross-site";
+  return fetchSite === "cross-site";
 }
 
 export function proxy(request: NextRequest) {
