@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
-function pickClientIp(request: Request) {
+type HeaderSource = { headers: { get(name: string): string | null } };
+
+function pickClientIp(request: HeaderSource) {
   if (process.env.TRUST_PROXY_HEADERS !== "true") {
     return "unknown";
   }
@@ -14,7 +16,7 @@ function pickClientIp(request: Request) {
   return raw.split(",")[0]?.trim() || "unknown";
 }
 
-export function getRateLimitKey(request: Request) {
+export function getRateLimitKey(request: HeaderSource) {
   const salt = process.env.RATE_LIMIT_SALT?.trim() || "samlink-rate-limit-v1";
   const ip = pickClientIp(request);
 

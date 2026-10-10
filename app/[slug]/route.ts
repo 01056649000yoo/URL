@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decodeSlugParam } from "@/lib/slug";
+import { lookupLinkGuarded } from "@/lib/link-lookup";
 import {
   getOrCreateVisitorIdentity,
   getRequestReferrer,
@@ -21,15 +22,21 @@ export async function GET(request: Request, context: RouteContext) {
   const admin = createAdminClient();
   const visitor = getOrCreateVisitorIdentity(request);
 
-  const { data, error } = await admin
-    .from("short_links")
-    .select("id, destination, is_active, expires_at")
-    .eq("slug", slug)
-    .maybeSingle();
+  // 없는 주소를 IP별로 세서 찍어 보기를 막는다(2026-10-10, lib/link-lookup.ts).
+  const lookup = await lookupLinkGuarded(admin, request, slug);
 
-  if (error || !data) {
+  if (lookup.status === "blocked") {
+    return NextResponse.json(
+      { error: "없는 주소를 너무 많이 열었어요. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(lookup.retryAfterSeconds) } },
+    );
+  }
+
+  if (lookup.status === "missing") {
     return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
   }
+
+  const data = lookup.link;
 
   const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : null;
   const isExpired = expiresAt !== null && expiresAt <= Date.now();
