@@ -30,7 +30,7 @@ const loadBundle = cache(async (rawSlug: string) => {
 
   // 없는 주소를 IP별로 세서 찍어 보기를 막는다(2026-10-10, lib/link-lookup.ts).
   const lookup = await lookupLinkGuarded(admin, { headers: await headers() }, slug);
-  if (lookup.status === "blocked") {
+  if (lookup.status === "blocked" || lookup.status === "unavailable") {
     return { blocked: true as const };
   }
   if (lookup.status === "missing") {

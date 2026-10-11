@@ -32,6 +32,13 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
 
+  if (lookup.status === "unavailable") {
+    return NextResponse.json(
+      { error: "잠시 후 다시 시도해 주세요." },
+      { status: 503, headers: { "Retry-After": String(lookup.retryAfterSeconds) } },
+    );
+  }
+
   if (lookup.status === "missing") {
     return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
   }

@@ -16,7 +16,9 @@ export type GuardedLink = {
 export type GuardedLookup =
   | { status: "found"; link: GuardedLink }
   | { status: "missing" }
-  | { status: "blocked"; retryAfterSeconds: number };
+  | { status: "blocked"; retryAfterSeconds: number }
+  // 막기 확인 함수가 오류를 냈다(DB·네트워크). 막기를 건너뛰고 조회로 넘어가지 않는다 — 잠시 뒤 다시.
+  | { status: "unavailable"; retryAfterSeconds: number };
 
 type LookupRow = {
   blocked: boolean;
@@ -33,19 +35,16 @@ export async function lookupLinkGuarded(
   request: { headers: { get(name: string): string | null } },
   slug: string,
 ): Promise<GuardedLookup> {
-  const { data, error } = await admin.rpc("lookup_short_link_guarded", {
-    p_slug: slug,
-    p_ip_hash: getRateLimitKey(request),
-  });
-
+  // 오류면 한 번만 다시 부른다(순간적인 연결 문제). 그래도 오류면 직접 조회로 넘어가지 않는다 — 막기를 일부러 오류 나게 해
+  // 우회하지 못하게(2026-10-11 Codex 독립 검토 지적, 선생님 결정 B안). DB 가 안 되면 어차피 조회도 안 되니 잃는 것이 거의 없다.
+  let result = await admin.rpc("lookup_short_link_guarded", { p_slug: slug, p_ip_hash: getRateLimitKey(request) });
+  if (result.error) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    result = await admin.rpc("lookup_short_link_guarded", { p_slug: slug, p_ip_hash: getRateLimitKey(request) });
+  }
+  const { data, error } = result;
   if (error) {
-    // 막기 확인이 실패해도 진짜 링크 열기는 멈추지 않는다 — 예전처럼 바로 조회한다.
-    const { data: link } = await admin
-      .from("short_links")
-      .select("id, destination, is_active, expires_at, bundle_items")
-      .eq("slug", slug)
-      .maybeSingle<GuardedLink>();
-    return link ? { status: "found", link } : { status: "missing" };
+    return { status: "unavailable", retryAfterSeconds: 5 };
   }
 
   const row = (Array.isArray(data) ? data[0] : data) as LookupRow | null;
