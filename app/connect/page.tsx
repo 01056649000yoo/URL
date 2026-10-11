@@ -10,14 +10,16 @@ export default function ConnectPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    const ticket = new URLSearchParams(window.location.hash.slice(1)).get("ticket") ?? "";
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const ticket = params.get("ticket") ?? "";
+    const state = params.get("state") ?? "";
     window.history.replaceState(null, "", "/connect");
     if (!ticket) {
       setMessage("연결 정보가 없습니다. 쌤링크 첫 화면에서 다시 눌러 주세요.");
       setDone(true);
       return;
     }
-    connectWithTicket(ticket)
+    connectWithTicket(ticket, state)
       .then((result) => {
         setMessage(`아지트 ${result.displayName ?? "선생님"} 계정에 연결했습니다.${result.moved ? ` 이 브라우저의 링크 ${result.moved}개를 계정에 담았어요.` : ""}`);
         setTimeout(() => window.location.replace("/"), 1800);

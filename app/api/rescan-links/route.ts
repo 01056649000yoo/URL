@@ -24,17 +24,34 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("short_links")
-    .select("id, slug, destination, bundle_items")
-    .eq("is_active", true)
-    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-    .limit(5000);
-  if (error) {
-    return NextResponse.json({ error: "링크 목록을 읽지 못했습니다." }, { status: 500 });
+  // 번호 순서로 1,000개씩 넘겨 가며 사용 중인 링크를 전부 읽는다. 전에는 5,000개까지만 읽어 그 뒤 링크는 검사 밖이었다
+  // (2026-10-11 보안 점검). 안전 상한은 5만 개 — 넘으면 일부를 읽지 못한 것이라 오류로 알린다.
+  const PAGE_SIZE = 1000;
+  const MAX_LINKS = 50_000;
+  const nowIso = new Date().toISOString();
+  const links: LinkRow[] = [];
+  let lastId = 0;
+  for (;;) {
+    const { data, error } = await admin
+      .from("short_links")
+      .select("id, slug, destination, bundle_items")
+      .eq("is_active", true)
+      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+      .gt("id", lastId)
+      .order("id", { ascending: true })
+      .limit(PAGE_SIZE);
+    if (error) {
+      return NextResponse.json({ error: "링크 목록을 읽지 못했습니다." }, { status: 500 });
+    }
+    const page = (data ?? []) as LinkRow[];
+    links.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    lastId = page[page.length - 1].id;
+    if (links.length >= MAX_LINKS) {
+      return NextResponse.json({ error: "검사할 링크가 너무 많아 전부 읽지 못했습니다." }, { status: 500 });
+    }
   }
 
-  const links = (data ?? []) as LinkRow[];
   const urlsOf = (link: LinkRow) => link.bundle_items?.items?.length
     ? link.bundle_items.items.map((item) => item.url).filter((url): url is string => Boolean(url))
     : [link.destination];

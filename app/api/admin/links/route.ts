@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { serverError } from "@/lib/api-error";
 
 type LinkVisitStats = {
   link_id: number;
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
       .limit(1000);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return serverError(error, "admin/links");
     }
 
     let deletedCount = 0;

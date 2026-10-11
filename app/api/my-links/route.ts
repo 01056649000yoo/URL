@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getBaseUrl } from "@/lib/site-url";
 import { getAccessibleLinkIds, getAccountAccess } from "@/lib/link-ownership";
 import { getViewer } from "@/lib/account-session";
+import { serverError } from "@/lib/api-error";
 
 function toDisplayUrl(shortUrl: string) {
   try {
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
       .limit(1000);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return serverError(error, "my-links");
     }
 
     const baseUrl = getBaseUrl(request);
@@ -62,7 +63,6 @@ export async function GET(request: NextRequest) {
     setDeviceCookie(response, deviceId);
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Server error.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "my-links");
   }
 }

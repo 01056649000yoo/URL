@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/account-session";
 import { decodeSlugParam } from "@/lib/slug";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLinkAccess, removeLinkAccess } from "@/lib/link-ownership";
+import { serverError } from "@/lib/api-error";
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
@@ -44,7 +45,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ deleted: true, slug: data.slug });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "my-links/[slug]");
   }
 }

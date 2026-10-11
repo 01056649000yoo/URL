@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { execSync } from "node:child_process";
+import { serverError } from "@/lib/api-error";
 
 let cachedCommitHash: string | null = null;
 
@@ -53,11 +54,11 @@ export async function GET() {
     ]);
 
     if (totalResult.error) {
-      return NextResponse.json({ error: totalResult.error.message }, { status: 500 });
+      return serverError(totalResult.error, "stats");
     }
 
     if (activeResult.error) {
-      return NextResponse.json({ error: activeResult.error.message }, { status: 500 });
+      return serverError(activeResult.error, "stats");
     }
 
     return NextResponse.json({
@@ -68,7 +69,6 @@ export async function GET() {
       commitHash: getCommitHash(),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "stats");
   }
 }

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { setDeviceCookie } from "@/lib/device-cookie";
 import { getViewer } from "@/lib/account-session";
 import { deviceCanManageLink } from "@/lib/link-ownership";
+import { serverError } from "@/lib/api-error";
 
 type ExtendPayload = {
   slug?: string;
@@ -38,15 +39,9 @@ export async function POST(request: NextRequest) {
       .eq("slug", slug)
       .maybeSingle();
 
-    if (error || !link) {
+    // 없는 링크와 내 것이 아닌 링크를 같은 404 로(존재 여부로 짧은 주소를 찾아내지 못하게, 2026-10-11 보안 점검).
+    if (error || !link || !(await deviceCanManageLink(admin, viewer, link))) {
       return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
-    }
-
-    if (!(await deviceCanManageLink(admin, viewer, link))) {
-      return NextResponse.json(
-        { error: "이 브라우저에서 만든 링크만 연장할 수 있습니다." },
-        { status: 403 },
-      );
     }
 
     if (!link.is_active) {
@@ -69,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       return NextResponse.json(
-        { error: `만료 기간을 연장하지 못했습니다. ${updateError.message}` },
+        { error: "만료 기간을 연장하지 못했습니다. 잠시 뒤 다시 시도해 주세요." },
         { status: 500 },
       );
     }
@@ -78,7 +73,6 @@ export async function POST(request: NextRequest) {
     setDeviceCookie(response, deviceId);
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "my-links/extend");
   }
 }

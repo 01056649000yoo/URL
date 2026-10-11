@@ -11,11 +11,12 @@ const AGIT_CONNECT_URL = `${AGIT_ORIGIN}/?samlink-connect=1`;
 
 type AccountState = { connected: boolean; displayName?: string };
 
-export async function connectWithTicket(ticket: string) {
-  const response = await fetch("/api/account/connect", {
+// state 가 있으면 샘링크.kr 직접 연결(/api/account/connect), 없으면 아지트 안 자동 연결(/api/account/connect-embed).
+export async function connectWithTicket(ticket: string, state?: string) {
+  const response = await fetch(state ? "/api/account/connect" : "/api/account/connect-embed", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ticket }),
+    body: JSON.stringify(state ? { ticket, state } : { ticket }),
   });
   const data = (await response.json().catch(() => ({}))) as { error?: string; displayName?: string; moved?: number };
   if (!response.ok) throw new Error(data.error || "연결하지 못했습니다.");
@@ -66,6 +67,19 @@ export function AccountBar({ isEmbedded, onChanged, onStatus }: { isEmbedded: bo
     return () => window.removeEventListener("message", onMessage);
   }, [account, isEmbedded]);
 
+  // 연결을 누르면 먼저 서버에서 일회용 state 를 받아(쿠키로도 심김) 아지트로 보낸다 — 돌아올 때 같은 state 만 받아들인다.
+  async function startConnect() {
+    setNotice("");
+    try {
+      const response = await fetch("/api/account/connect-start", { method: "POST" });
+      const data = (await response.json()) as { state?: string };
+      if (!response.ok || !data.state) throw new Error("start failed");
+      window.location.assign(`${AGIT_CONNECT_URL}&state=${encodeURIComponent(data.state)}`);
+    } catch {
+      setNotice("연결을 시작하지 못했어요. 잠시 뒤 다시 눌러 주세요.");
+    }
+  }
+
   async function disconnect() {
     await fetch("/api/account/disconnect", { method: "POST" }).catch(() => {});
     setAccount({ connected: false });
@@ -100,7 +114,7 @@ export function AccountBar({ isEmbedded, onChanged, onStatus }: { isEmbedded: bo
         <strong>지금은 내 링크가 이 브라우저에만 저장돼요</strong>
         <small>{notice || "다른 컴퓨터나 브라우저에서는 보이지 않고, 쿠키를 지우면 사라져요. 끄적끄적아지트 선생님 계정으로 연결하면 어디서든 내 링크가 그대로 보여요."}</small>
       </span>
-      <a className="account-bar-action" href={AGIT_CONNECT_URL}>아지트 계정으로 연결</a>
+      <button type="button" className="account-bar-action" onClick={startConnect}>아지트 계정으로 연결</button>
     </div>
   );
 }

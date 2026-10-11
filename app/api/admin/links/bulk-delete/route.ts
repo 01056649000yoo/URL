@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { serverError } from "@/lib/api-error";
 
 type BulkDeletePayload = {
   ids?: number[];
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return serverError(error, "admin/links/bulk-delete");
     }
 
     const deletedCount = typeof data === "number" ? data : 0;

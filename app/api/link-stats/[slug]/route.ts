@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/account-session";
 import { decodeSlugParam } from "@/lib/slug";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deviceCanManageLink } from "@/lib/link-ownership";
+import { serverError } from "@/lib/api-error";
 
 type RouteContext = {
   params: Promise<{
@@ -34,12 +35,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .eq("slug", slug)
       .maybeSingle();
 
-    if (error || !link) {
+    // 없는 링크와 "내가 볼 수 없는 링크"를 같은 404 로 답한다 — 403/404 가 다르면 쿠키 없는 외부인이 이 주소로
+    // 살아 있는 짧은 주소를 제한 없이 찾아낼 수 있었다(2026-10-11 보안 점검, 200번 연달아 구분됨).
+    if (error || !link || !(await deviceCanManageLink(admin, viewer, link))) {
       return NextResponse.json({ error: "링크를 찾을 수 없습니다." }, { status: 404 });
-    }
-
-    if (!(await deviceCanManageLink(admin, viewer, link))) {
-      return NextResponse.json({ error: "이 링크의 통계를 볼 권한이 없습니다." }, { status: 403 });
     }
 
     const { data: visitStatsData } = await admin.rpc("get_link_visit_stats", {
@@ -61,7 +60,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
       expiresAt: link.expires_at,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "link-stats/[slug]");
   }
 }

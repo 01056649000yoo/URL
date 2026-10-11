@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { serverError } from "@/lib/api-error";
 
 type RouteContext = {
   params: Promise<{
@@ -32,7 +33,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return serverError(error, "admin/links/[id]");
     }
 
     return NextResponse.json({ link: data });
@@ -58,7 +59,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return serverError(error, "admin/links/[id]");
     }
 
     const deletedCount = typeof data === "number" ? data : 0;
