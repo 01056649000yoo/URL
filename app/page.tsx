@@ -61,6 +61,8 @@ const LAST_RESULT_KEY = "samlink-last-result";
 const MY_LINKS_KEY = "samlink-my-links";
 const MAX_SAVED_LINKS = 30;
 const LINK_FOLDERS_KEY = "samlink-link-folders";
+// 목록을 접어 둔 상태는 모드(일반 링크·묶음)마다 따로 이 브라우저에 기억합니다. 접어 두면 다음에도 접힌 채로 열립니다.
+const LIST_COLLAPSED_KEY = "samlink-list-collapsed";
 
 const BRAND_DOMAIN = "샘링크.kr";
 const PAGE_TITLE = "샘링크 | 수업링크를 짧고 간편하게, QR코드로 바로 접속";
@@ -342,6 +344,7 @@ export default function HomePage() {
   const [draggedSlug, setDraggedSlug] = useState<string | null>(null);
   const [folderNotice, setFolderNotice] = useState("");
   const [expandedFolderIds, setExpandedFolderIds] = useState<string[]>([]);
+  const [collapsedLists, setCollapsedLists] = useState<Record<string, boolean>>({});
   const [pendingDeleteSlug, setPendingDeleteSlug] = useState<string | null>(null);
   const [isDeletingLink, setIsDeletingLink] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -361,6 +364,30 @@ export default function HomePage() {
 
   // 만들기 유형: 일반 단축 링크 또는 여러 주소를 묶은 링크 묶음(수업 세트)
   const [createMode, setCreateMode] = useState<"single" | "bundle" | "manage">("single");
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(LIST_COLLAPSED_KEY);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        setCollapsedLists(parsed as Record<string, boolean>);
+      }
+    } catch {
+      // 저장소를 못 읽어도 펼친 채로 동작합니다.
+    }
+  }, []);
+
+  function toggleListCollapsed(key: string) {
+    setCollapsedLists((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        window.localStorage.setItem(LIST_COLLAPSED_KEY, JSON.stringify(next));
+      } catch {
+        // 저장에 실패해도 이번 화면에서는 접고 펼 수 있습니다.
+      }
+      return next;
+    });
+  }
   const [customSlug, setCustomSlug] = useState("");
   const [bundleTitle, setBundleTitle] = useState("");
   const [bundleItems, setBundleItems] = useState<{ label: string; url: string }[]>([
@@ -1641,16 +1668,24 @@ export default function HomePage() {
         <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} onStatus={setIsAccountConnected} />
 
         {createMode !== "manage" ? (
-          <section className="result-card quick-link-list" aria-label={createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}>
+          <section className={`result-card quick-link-list${collapsedLists[createMode] ? " is-collapsed" : ""}`} aria-label={createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}>
             <div className="result-head">
               <strong>{createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}</strong>
+              <button
+                type="button"
+                className="list-collapse-toggle"
+                aria-expanded={!collapsedLists[createMode]}
+                onClick={() => toggleListCollapsed(createMode)}
+              >
+                {collapsedLists[createMode] ? `펼치기 ▼${creationModeLinks.length ? ` (${creationModeLinks.length})` : ""}` : "접기 ▲"}
+              </button>
               <span className="result-tip">
                 {createMode === "bundle"
                   ? (isAccountConnected ? "아지트 계정에 저장된 링크 묶음을 보여줍니다." : "이 브라우저에서 만든 링크 묶음만 보여줍니다.")
                   : (isAccountConnected ? "아지트 계정에 저장된 일반 링크를 보여줍니다." : "이 브라우저에서 만든 일반 링크만 보여줍니다.")}
               </span>
             </div>
-            {creationModeLinks.length ? (
+            {collapsedLists[createMode] ? null : creationModeLinks.length ? (
               <div className="saved-links-list">
                 {creationModeLinks.map((link) => renderManagedLink(link, false))}
               </div>

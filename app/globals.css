@@ -2261,3 +2261,27 @@ textarea {
   .account-bar { flex-wrap: wrap; }
   .account-bar-action { width: 100%; text-align: center; }
 }
+
+/* 내가 만든 링크 목록 접기 */
+.quick-link-list .result-head {
+  position: relative;
+  padding-right: 110px;
+}
+.list-collapse-toggle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.list-collapse-toggle:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
