@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as { ticket?: string; state?: string };
   if (!connectStateMatches(body.state, readConnectStateCookie(request))) {
     const rejected = NextResponse.json(
-      { error: "연결 요청이 이 브라우저에서 시작한 것이 아닙니다. 쌤링크 첫 화면에서 '아지트 계정으로 연결'을 다시 눌러 주세요." },
+      { error: "이 브라우저에서 시작한 연결이 아니에요. 샘링크.kr 첫 화면에서 '아지트 계정으로 연결'을 다시 눌러 주세요. (www가 붙은 주소나 다른 주소에서 시작했다면 샘링크.kr 에서 다시 눌러 주세요.)" },
       { status: 403 },
     );
     clearConnectStateCookie(rejected);

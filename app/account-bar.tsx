@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 // 연결표는 1분·한 번만 쓰는 값이라 아지트 로그인 토큰이 쌤링크로 넘어오지 않는다.
 export const AGIT_ORIGIN = "https://xn--vz0ba242ncqcba79xhwx.site";
 const AGIT_CONNECT_URL = `${AGIT_ORIGIN}/?samlink-connect=1`;
+const RESTART_PARAM = "samlink-restart";
 
 type AccountState = { connected: boolean; displayName?: string };
 
@@ -27,7 +28,7 @@ async function postConnect(path: string, body: Record<string, string>) {
 // 샘링크.kr 에서 직접 누른 연결: state 가 꼭 있어야 한다. state 가 없으면 서버로 보내지 않고 멈춘다
 // (2026-10-14 점검: 예전에는 state 가 없으면 state 를 안 보는 아지트 안 연결 길로 넘어가, 남이 만든 `/connect#ticket=…` 주소로 연결이 바뀔 수 있었다).
 export async function connectWithTicket(ticket: string, state: string) {
-  if (!state) throw new Error("연결 요청이 이 브라우저에서 시작한 것이 아닙니다. 쌤링크 첫 화면에서 '아지트 계정으로 연결'을 다시 눌러 주세요.");
+  if (!state) throw new Error("아지트가 확인표를 돌려주지 않았어요. 샘링크.kr 첫 화면에서 '아지트 계정으로 연결'을 다시 눌러 주세요.");
   return postConnect("/api/account/connect", { ticket, state });
 }
 
@@ -80,13 +81,32 @@ export function AccountBar({ isEmbedded, onChanged, onStatus }: { isEmbedded: bo
     return () => window.removeEventListener("message", onMessage);
   }, [account, isEmbedded]);
 
+  // 정식 주소로 옮겨 온 연결 시작(위 startConnect)은 여기서 이어서 한다.
+  useEffect(() => {
+    if (isEmbedded) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(RESTART_PARAM) !== "1") return;
+    url.searchParams.delete(RESTART_PARAM);
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    void startConnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 연결을 누르면 먼저 서버에서 일회용 state 를 받아(쿠키로도 심김) 아지트로 보낸다 — 돌아올 때 같은 state 만 받아들인다.
   async function startConnect() {
     setNotice("");
     try {
       const response = await fetch("/api/account/connect-start", { method: "POST" });
-      const data = (await response.json()) as { state?: string };
+      const data = (await response.json()) as { state?: string; origin?: string };
       if (!response.ok || !data.state) throw new Error("start failed");
+      // 정식 주소가 아닌 곳(www·옛 주소)에서 눌렀다면 정식 주소로 옮겨 거기서 다시 시작한다 — 돌아올 곳과 시작한 곳이 같아야 확인표가 맞는다.
+      if (data.origin) {
+        const canonical = new URL(data.origin);
+        if (canonical.host !== window.location.host || canonical.protocol !== window.location.protocol) {
+          window.location.assign(`${canonical.origin}/?${RESTART_PARAM}=1`);
+          return;
+        }
+      }
       window.location.assign(`${AGIT_CONNECT_URL}&state=${encodeURIComponent(data.state)}`);
     } catch {
       setNotice("연결을 시작하지 못했어요. 잠시 뒤 다시 눌러 주세요.");

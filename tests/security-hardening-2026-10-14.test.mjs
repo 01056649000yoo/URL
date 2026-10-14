@@ -41,3 +41,11 @@ test('묶음 화면: http·https 가 아닌 주소는 열지 않는다', async (
   assert.match(src, /href=\{safeHref\}/);
   assert.doesNotMatch(src, /href=\{item\.url\}/);
 });
+
+test('계정 연결 시작: 정식 주소가 아닌 곳에서 눌렀다면 정식 주소로 옮겨 다시 시작한다', async () => {
+  const bar = await readFile('app/account-bar.tsx', 'utf8');
+  const start = await readFile('app/api/account/connect-start/route.ts', 'utf8');
+  assert.match(start, /getBaseUrl\(request\)/);
+  assert.match(bar, /canonical\.host !== window\.location\.host/);
+  assert.match(bar, /samlink-restart/);
+});
