@@ -2364,9 +2364,9 @@ body {
 
   /* 머리: 로고 + 기능 칩 */
   .hero-overview { grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr); gap: 18px; }
-  .brand-logo { height: 80px; }
+  .brand-logo { height: 112px; }
   .feature-brief { justify-items: stretch; }
-  .feature-brief-list { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; justify-content: stretch; }
+  .feature-brief-list { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; justify-content: stretch; }
   .feature-brief-pill {
     white-space: normal; justify-content: flex-start; border-radius: 12px;
     padding: 6px 9px; font-size: 0.8125rem; line-height: 1.25; background: #fff; border-color: var(--line);
@@ -2443,7 +2443,7 @@ body {
 /* 낮은 화면: 부가 문구를 줄여 한 화면에 맞춤 */
 @media (min-width: 701px) and (min-height: 521px) and (max-height: 800px) {
   .form-intro p, .form-hint, .bundle-nudge, .bundle-editor-hint, .link-folder-guide { display: none; }
-  .brand-logo { height: 68px; }
+  .brand-logo { height: 76px; }
   .field { height: 40px; }
   .submit { height: 46px; }
   .main-mode-tabs button { padding: 8px 12px; }
@@ -2683,4 +2683,11 @@ body {
 }
 @media (min-width: 701px) and (min-height: 741px) and (max-height: 800px) {
   .col-make .result-card { justify-content: space-between; }
+}
+
+@media (min-width: 701px) and (min-height: 521px) and (max-height: 740px) { .brand-logo { height: 66px; } }
+@media (min-width: 701px) and (max-width: 1100px) and (min-height: 521px) and (max-height: 800px) { .brand-logo { height: 62px; } .feature-brief-pill { padding: 4px 8px; font-size: 0.78rem; } }
+@media (min-width: 701px) and (max-width: 1100px) and (min-height: 521px) and (max-height: 800px) {
+  .col-make .public-footer-banner { display: none; }
+  .col-make .result-card { flex: 0 0 auto; }
 }
