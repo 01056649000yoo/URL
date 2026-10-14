@@ -63,6 +63,7 @@ const MAX_SAVED_LINKS = 30;
 const LINK_FOLDERS_KEY = "samlink-link-folders";
 // 목록을 접어 둔 상태는 모드(일반 링크·묶음)마다 따로 이 브라우저에 기억합니다. 접어 두면 다음에도 접힌 채로 열립니다.
 const LIST_COLLAPSED_KEY = "samlink-list-collapsed";
+const LIST_VIEW_KEY = "samlink-list-view";
 
 const BRAND_DOMAIN = "샘링크.kr";
 const PAGE_TITLE = "샘링크 | 수업링크를 짧고 간편하게, QR코드로 바로 접속";
@@ -136,6 +137,17 @@ function getGraceDaysLeft(value?: string | null) {
 }
 
 // 만료 7일 전부터 D-day 배지를 보여줍니다 (3일 이하는 강조).
+// 목록 행에 늘 보여 주는 남은 기간(D-일). 만료 3일 이하면 강조합니다.
+function getDday(value?: string | null): { text: string; urgent: boolean } | null {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return null;
+  const remaining = time - Date.now();
+  if (remaining <= 0) return null;
+  const days = Math.ceil(remaining / (24 * 60 * 60 * 1000));
+  return { text: days <= 1 ? "오늘 만료" : `D-${days}`, urgent: days <= 3 };
+}
+
 function getExpiryBadge(value?: string | null): { text: string; urgent: boolean } | null {
   if (!value) return null;
   const time = new Date(value).getTime();
@@ -345,6 +357,11 @@ export default function HomePage() {
   const [folderNotice, setFolderNotice] = useState("");
   const [expandedFolderIds, setExpandedFolderIds] = useState<string[]>([]);
   const [collapsedLists, setCollapsedLists] = useState<Record<string, boolean>>({});
+  const [listQuery, setListQuery] = useState("");
+  const [listSort, setListSort] = useState<"new" | "exp" | "visits">("new");
+  const [listView, setListView] = useState<"row" | "card">("row");
+  const [selectedFolderId, setSelectedFolderId] = useState("none");
+  const [toastMessage, setToastMessage] = useState("");
   const [pendingDeleteSlug, setPendingDeleteSlug] = useState<string | null>(null);
   const [isDeletingLink, setIsDeletingLink] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -376,6 +393,40 @@ export default function HomePage() {
       // 저장소를 못 읽어도 펼친 채로 동작합니다.
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(LIST_VIEW_KEY);
+      if (saved === "row" || saved === "card") setListView(saved);
+    } catch {
+      // 저장소를 못 읽어도 한 줄 보기로 동작합니다.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = window.setTimeout(() => setToastMessage(""), 1800);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
+
+  function changeListView(next: "row" | "card") {
+    setListView(next);
+    try {
+      window.localStorage.setItem(LIST_VIEW_KEY, next);
+    } catch {
+      // 저장에 실패해도 이번 화면에서는 바뀝니다.
+    }
+  }
+
+  async function copyLinkUrl(link: MergedLink) {
+    const url = link.displayShortUrl ?? link.shortUrl;
+    try {
+      await navigator.clipboard.writeText(url);
+      setToastMessage("복사했어요");
+    } catch {
+      setToastMessage("복사하지 못했어요. 주소를 직접 선택해 복사해 주세요.");
+    }
+  }
 
   function toggleListCollapsed(key: string) {
     setCollapsedLists((prev) => {
@@ -668,6 +719,20 @@ export default function HomePage() {
   const creationModeLinks = createMode === "bundle"
     ? activeLinks.filter((link) => link.isBundle)
     : activeLinks.filter((link) => !link.isBundle);
+  const listQueryText = listQuery.trim().toLowerCase();
+  const shownModeLinks = creationModeLinks
+    .filter((link) => !listQueryText || `${link.label ?? ""} ${link.slug} ${link.destination}`.toLowerCase().includes(listQueryText))
+    .sort((a, b) => {
+      if (listSort === "exp") {
+        const ea = new Date(savedLinkStats[a.slug]?.expiresAt ?? a.expiresAt ?? "").getTime();
+        const eb = new Date(savedLinkStats[b.slug]?.expiresAt ?? b.expiresAt ?? "").getTime();
+        return (Number.isFinite(ea) ? ea : Infinity) - (Number.isFinite(eb) ? eb : Infinity);
+      }
+      if (listSort === "visits") {
+        return (savedLinkStats[b.slug]?.clickCount ?? 0) - (savedLinkStats[a.slug]?.clickCount ?? 0);
+      }
+      return new Date(b.sortAt ?? 0).getTime() - new Date(a.sortAt ?? 0).getTime();
+    });
   const stoppedModeLinks = createMode === "bundle"
     ? stoppedLinks.filter((link) => link.isBundle)
     : stoppedLinks.filter((link) => !link.isBundle);
@@ -676,6 +741,11 @@ export default function HomePage() {
     for (const slug of folder.slugs) folderBySlug.set(slug, folder.id);
   }
   const unfiledLinks = activeLinks.filter((link) => !folderBySlug.has(link.slug));
+  const currentFolder = linkFolders.find((folder) => folder.id === selectedFolderId) ?? null;
+  const currentFolderId = currentFolder ? currentFolder.id : "none";
+  const currentFolderLinks = currentFolder
+    ? activeLinks.filter((link) => currentFolder.slugs.includes(link.slug))
+    : unfiledLinks;
 
   useEffect(() => {
     setPendingDeleteSlug(null);
@@ -1344,54 +1414,85 @@ export default function HomePage() {
     setFolderNotice("폴더를 삭제하고 링크를 미분류로 이동했습니다.");
   }
 
-  function renderManagedLink(link: MergedLink, allowDrag = true) {
+  function renderManagedLink(link: MergedLink, allowDrag = true, showMove = false) {
     const linkUrl = link.displayShortUrl ?? link.shortUrl;
     const statsForLink = savedLinkStats[link.slug];
     const effectiveExpiresAt = statsForLink?.expiresAt ?? link.expiresAt;
     const linkExpired = isExpired(effectiveExpiresAt);
     const isDisabled = link.isActive === false;
-    const expiryBadge = isDisabled || linkExpired ? null : getExpiryBadge(effectiveExpiresAt);
+    const dday = isDisabled || linkExpired ? null : getDday(effectiveExpiresAt);
+    const currentFolderId = folderBySlug.get(link.slug) ?? "none";
+    const canDrag = allowDrag && !isDisabled;
 
     return (
-      <button
-        className={draggedSlug === link.slug ? "saved-link-item is-dragging" : "saved-link-item"}
-        type="button"
+      <div
+        className={`saved-link-row${draggedSlug === link.slug ? " is-dragging" : ""}${isDisabled ? " is-disabled" : ""}`}
         key={link.slug}
-        disabled={isDisabled}
-        draggable={allowDrag && !isDisabled}
-        onDragStart={allowDrag ? (event) => {
+        draggable={canDrag}
+        onDragStart={canDrag ? (event) => {
           setDraggedSlug(link.slug);
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", link.slug);
         } : undefined}
-        onDragEnd={allowDrag ? () => setDraggedSlug(null) : undefined}
-        onClick={() => openMergedLink(link)}
+        onDragEnd={canDrag ? () => setDraggedSlug(null) : undefined}
       >
         {allowDrag ? <div className="saved-link-drag-handle" aria-hidden="true">⋮⋮</div> : null}
-        <div className="saved-link-item-main">
-          <div className="saved-link-heading">
-            <span className={link.label ? "saved-link-title" : "saved-link-title is-empty"}>
-              {link.label || "별명 없음"}
-            </span>
-            {link.isBundle
-              ? <span className="link-kind-badge bundle">🗂️ 링크 묶음</span>
-              : <span className="link-kind-badge">🔗 일반 링크</span>}
+        <button
+          className="saved-link-item"
+          type="button"
+          disabled={isDisabled}
+          onClick={() => openMergedLink(link)}
+          aria-label={`${link.label || "별명 없음"} ${linkUrl} 상세 보기`}
+        >
+          <div className="saved-link-item-main">
+            <div className="saved-link-heading">
+              <span className={link.label ? "saved-link-title" : "saved-link-title is-empty"}>
+                {link.label || "별명 없음"}
+              </span>
+              {link.isBundle
+                ? <span className="link-kind-badge bundle">🗂️ 링크 묶음</span>
+                : <span className="link-kind-badge">🔗 일반 링크</span>}
+            </div>
+            <strong className="saved-link-url">{linkUrl}</strong>
+            <span className="saved-link-destination">{link.destination}</span>
           </div>
-          <strong className="saved-link-url">{linkUrl}</strong>
-          <span className="saved-link-destination">{link.destination}</span>
-        </div>
-        <div className="saved-link-item-meta">
-          {isDisabled ? <span className="my-link-status">비활성</span> : null}
-          {!isDisabled && linkExpired ? (
-            <span className="expiry-badge urgent">만료 · {getGraceDaysLeft(effectiveExpiresAt)}일 내 복구 가능</span>
-          ) : null}
-          {expiryBadge ? <span className={expiryBadge.urgent ? "expiry-badge urgent" : "expiry-badge"}>⏳ {expiryBadge.text}</span> : null}
-          <span>클릭 {statsForLink?.clickCount ?? 0}</span>
-          <span>최근 5분 {statsForLink?.recentVisitors ?? 0}</span>
-        </div>
-      </button>
+          <div className="saved-link-item-meta">
+            {isDisabled ? <span className="my-link-status">비활성</span> : null}
+            {!isDisabled && linkExpired ? (
+              <span className="expiry-badge urgent">만료 · {getGraceDaysLeft(effectiveExpiresAt)}일 내 복구 가능</span>
+            ) : null}
+            {dday ? <span className={dday.urgent ? "expiry-badge urgent" : "expiry-badge"}>{dday.text}</span> : null}
+            <span>클릭 {statsForLink?.clickCount ?? 0}</span>
+            <span className="saved-link-recent">최근 5분 {statsForLink?.recentVisitors ?? 0}</span>
+          </div>
+        </button>
+        {!isDisabled ? (
+          <button className="row-copy" type="button" onClick={() => void copyLinkUrl(link)} aria-label={`${linkUrl} 복사`}>
+            복사
+          </button>
+        ) : null}
+        {showMove && !isDisabled ? (
+          <select
+            className="row-move"
+            aria-label={`${link.label || linkUrl} 폴더 이동`}
+            value=""
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!value || value === currentFolderId) return;
+              moveLinkToFolder(link.slug, value === "none" ? null : value);
+            }}
+          >
+            <option value="">폴더 이동</option>
+            <option value="none">🗂️ 미분류</option>
+            {linkFolders.map((folder) => (
+              <option key={folder.id} value={folder.id}>📁 {folder.name}</option>
+            ))}
+          </select>
+        ) : null}
+      </div>
     );
   }
+
 
   useEffect(() => {
     setIsEmbedded(new URLSearchParams(window.location.search).get("embed") === "agit");
@@ -1689,7 +1790,16 @@ export default function HomePage() {
         {createMode !== "manage" ? (
           <section className={`result-card quick-link-list${collapsedLists[createMode] ? " is-collapsed" : ""}`} aria-label={createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}>
             <div className="result-head">
-              <strong>{createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}</strong>
+              <strong>
+                {createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}
+                {creationModeLinks.length ? <span className="list-count"> {creationModeLinks.length}개</span> : null}
+              </strong>
+              {!collapsedLists[createMode] && creationModeLinks.length ? (
+                <div className="view-toggle" role="group" aria-label="보기 방식">
+                  <button type="button" aria-pressed={listView === "row"} title="한 줄 보기" onClick={() => changeListView("row")}>☰</button>
+                  <button type="button" aria-pressed={listView === "card"} title="카드 보기" onClick={() => changeListView("card")}>▦</button>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="list-collapse-toggle"
@@ -1704,10 +1814,42 @@ export default function HomePage() {
                   : (isAccountConnected ? "아지트 계정에 저장된 일반 링크를 보여줍니다." : "이 브라우저에서 만든 일반 링크만 보여줍니다.")}
               </span>
             </div>
-            {collapsedLists[createMode] ? null : creationModeLinks.length ? (
-              <div className="saved-links-list">
-                {creationModeLinks.map((link) => renderManagedLink(link, false))}
+            {!collapsedLists[createMode] && creationModeLinks.length >= 4 ? (
+              <div className="list-toolbar">
+                <input
+                  className="list-search"
+                  type="search"
+                  value={listQuery}
+                  onChange={(event) => setListQuery(event.target.value)}
+                  placeholder="🔍 별명·주소 검색"
+                  aria-label="링크 검색"
+                />
+                <div className="list-sorts" role="group" aria-label="정렬">
+                  {([
+                    { value: "new", text: "최근순" },
+                    { value: "exp", text: "만료 임박" },
+                    { value: "visits", text: "방문 많은순" },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={listSort === option.value}
+                      onClick={() => setListSort(option.value)}
+                    >
+                      {option.text}
+                    </button>
+                  ))}
+                </div>
               </div>
+            ) : null}
+            {collapsedLists[createMode] ? null : creationModeLinks.length ? (
+              shownModeLinks.length ? (
+                <div className={`saved-links-list${listView === "card" ? " is-cards" : ""}`}>
+                  {shownModeLinks.map((link) => renderManagedLink(link, false))}
+                </div>
+              ) : (
+                <p className="empty-result">‘{listQuery.trim()}’에 맞는 링크가 없어요.</p>
+              )
             ) : isLoadingMyLinks ? (
               <p className="empty-result">불러오는 중...</p>
             ) : (
@@ -1735,92 +1877,76 @@ export default function HomePage() {
             <span className="result-tip">{isAccountConnected ? "아지트 계정에 저장된 링크입니다." : "이 브라우저에 저장된 링크입니다."} 링크를 누르면 통계·QR·별명·만료 연장을 관리할 수 있어요.</span>
           </div>
 
-          <form className="link-folder-create" onSubmit={createLinkFolder}>
-            <input
-              value={newFolderName}
-              onChange={(event) => setNewFolderName(event.target.value)}
-              maxLength={30}
-              placeholder="예: 3학년 국어, 학부모 안내"
-              aria-label="새 폴더 이름"
-            />
-            <button type="submit">+ 폴더 만들기</button>
-          </form>
-          <div className="link-folder-guide" aria-label="폴더 사용 방법">
-            <strong>📁 폴더로 링크를 정리해 보세요</strong>
-            <div>
-              <span><b>1</b> 수업·학년·용도별 폴더 만들기</span>
-              <span><b>2</b> 링크 카드의 ⋮⋮를 잡아 폴더로 드래그</span>
-              <span><b>3</b> 폴더 제목을 눌러 링크 펼쳐보기</span>
-            </div>
-            <p>일반 링크와 링크 묶음을 함께 정리할 수 있으며, 폴더 구성은 현재 브라우저에 저장됩니다.</p>
-          </div>
           {folderNotice ? <p className="folder-notice">{folderNotice}</p> : null}
 
           {mergedLinks.length || linkFolders.length ? (
-            <div className="link-folder-board">
-              {linkFolders.map((folder) => {
-                const folderLinks = activeLinks.filter((link) => folder.slugs.includes(link.slug));
-                const isExpanded = expandedFolderIds.includes(folder.id);
-                return (
-                  <section
-                    className={draggedSlug ? "link-folder is-drop-ready" : "link-folder"}
-                    key={folder.id}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const slug = event.dataTransfer.getData("text/plain") || draggedSlug;
-                      if (slug) moveLinkToFolder(slug, folder.id);
-                    }}
-                  >
-                    <div className="link-folder-head">
-                      <button
-                        className="link-folder-toggle"
-                        type="button"
-                        onClick={() => toggleLinkFolder(folder.id)}
-                        aria-expanded={isExpanded}
-                      >
-                        <span className="link-folder-icon">📁</span>
-                        <strong>{folder.name}</strong>
-                        <span>{folderLinks.length}개</span>
-                        <span className="link-folder-chevron" aria-hidden="true">{isExpanded ? "▲" : "▼"}</span>
-                      </button>
-                      <div className="link-folder-actions">
-                        <button type="button" onClick={() => renameLinkFolder(folder)}>이름 변경</button>
-                        <button type="button" onClick={() => deleteLinkFolder(folder)}>삭제</button>
-                      </div>
-                    </div>
-                    {isExpanded ? (
-                      <div className="saved-links-list">
-                        {folderLinks.length ? folderLinks.map((link) => renderManagedLink(link)) : (
-                          <p className="link-folder-empty">링크 카드를 이곳으로 드래그하세요.</p>
-                        )}
-                      </div>
-                    ) : null}
-                  </section>
-                );
-              })}
-
-              <section
-                className={draggedSlug ? "link-folder link-folder-unfiled is-drop-ready" : "link-folder link-folder-unfiled"}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const slug = event.dataTransfer.getData("text/plain") || draggedSlug;
-                  if (slug) moveLinkToFolder(slug, null);
-                }}
-              >
-                <div className="link-folder-head">
-                  <div><span className="link-folder-icon">🗂️</span><strong>미분류</strong><span>{unfiledLinks.length}개</span></div>
+            <div className="manage-grid">
+              <div className="manage-folders">
+                <form className="link-folder-create" onSubmit={createLinkFolder}>
+                  <input
+                    value={newFolderName}
+                    onChange={(event) => setNewFolderName(event.target.value)}
+                    maxLength={30}
+                    placeholder="새 폴더 이름 (예: 3학년 국어)"
+                    aria-label="새 폴더 이름"
+                  />
+                  <button type="submit">＋ 만들기</button>
+                </form>
+                <div className="manage-folder-list" role="listbox" aria-label="폴더 목록">
+                  {[
+                    { id: "none", name: "미분류", icon: "🗂️", count: unfiledLinks.length },
+                    ...linkFolders.map((folder) => ({
+                      id: folder.id,
+                      name: folder.name,
+                      icon: "📁",
+                      count: activeLinks.filter((link) => folder.slugs.includes(link.slug)).length,
+                    })),
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="option"
+                      aria-selected={item.id === currentFolderId}
+                      className={`manage-folder${draggedSlug ? " is-drop-ready" : ""}`}
+                      onClick={() => setSelectedFolderId(item.id)}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const slug = event.dataTransfer.getData("text/plain") || draggedSlug;
+                        if (slug) moveLinkToFolder(slug, item.id === "none" ? null : item.id);
+                      }}
+                    >
+                      <span className="manage-folder-icon" aria-hidden="true">{item.icon}</span>
+                      <span className="manage-folder-name">{item.name}</span>
+                      <span className="manage-folder-count">{item.count}</span>
+                    </button>
+                  ))}
                 </div>
-                <div className="saved-links-list">
-                  {unfiledLinks.length ? unfiledLinks.map((link) => renderManagedLink(link)) : (
-                    <p className="link-folder-empty">정리되지 않은 링크가 없습니다.</p>
+                <p className="manage-tip">링크 줄의 ⋮⋮를 잡아 폴더로 끌어다 놓거나, 줄의 ‘폴더 이동’ 상자를 쓰세요. 폴더 구성은 현재 브라우저에 저장돼요.</p>
+              </div>
+
+              <div className="manage-links">
+                <div className="manage-links-head">
+                  <strong>{currentFolder ? `📁 ${currentFolder.name}` : "🗂️ 미분류"}</strong>
+                  <span className="list-count">{currentFolderLinks.length}개</span>
+                  {currentFolder ? (
+                    <div className="link-folder-actions">
+                      <button type="button" onClick={() => renameLinkFolder(currentFolder)}>이름 변경</button>
+                      <button type="button" onClick={() => deleteLinkFolder(currentFolder)}>폴더 삭제</button>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="saved-links-list manage-links-list">
+                  {currentFolderLinks.length ? currentFolderLinks.map((link) => renderManagedLink(link, true, true)) : (
+                    <p className="link-folder-empty">
+                      {currentFolder ? "이 폴더에는 링크가 없어요. 다른 폴더의 링크를 끌어다 놓아 보세요." : "정리되지 않은 링크가 없습니다."}
+                    </p>
                   )}
                 </div>
-              </section>
+              </div>
             </div>
           ) : isLoadingMyLinks ? (
             <p className="empty-result">불러오는 중...</p>
@@ -1897,6 +2023,8 @@ export default function HomePage() {
         </nav>
         </div>
       </section>
+
+      {toastMessage ? <div className="samlink-toast" role="status" aria-live="polite">✓ {toastMessage}</div> : null}
 
       {!isEmbedded ? <footer className="site-footer" aria-label="사업자 정보">
         상호명: 끄적끄적 아지트 | 운영책임자: 유승현 | 문의: <a href="mailto:yshgg@naver.com">yshgg@naver.com</a> |{" "}
