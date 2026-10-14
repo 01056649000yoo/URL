@@ -1428,6 +1428,7 @@ export default function HomePage() {
           </aside>
         </section>
 
+        <div className="col-side">
         <nav className="main-mode-tabs" aria-label="샘링크 기능 선택">
           <button className={createMode === "single" ? "is-active" : ""} type="button" onClick={() => setCreateMode("single")}>
             <span className="mode-tab-title">🔗 일반 링크</span>
@@ -1442,6 +1443,10 @@ export default function HomePage() {
             <span className="mode-tab-desc">만든 링크 보기·정리</span>
           </button>
         </nav>
+          <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} onStatus={setIsAccountConnected} />
+        </div>
+
+        <div className="col-make">
 
         {createMode !== "manage" ? (
         <form className="stack create-form" onSubmit={handleSubmit}>
@@ -1669,9 +1674,17 @@ export default function HomePage() {
           </section>
         ) : null}
 
+        {createMode !== "manage" && !(result && (createMode === "single" || (createMode === "bundle" && result.isBundle))) ? (
+          <div className="result-placeholder" aria-hidden="true">
+            <span>{createMode === "bundle" ? "🗂️" : "🔗"}</span>
+            <strong>{createMode === "bundle" ? "만들면 묶음 주소와 QR이 나타나요" : "만들면 여기에 QR이 나타나요"}</strong>
+            <small>짧은 주소를 복사하거나 QR을 저장할 수 있어요.</small>
+          </div>
+        ) : null}
+
         {error && createMode !== "manage" ? <p className="error">{error}</p> : null}
 
-        <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} onStatus={setIsAccountConnected} />
+        </div>
 
         {createMode !== "manage" ? (
           <section className={`result-card quick-link-list${collapsedLists[createMode] ? " is-collapsed" : ""}`} aria-label={createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}>
@@ -1861,6 +1874,7 @@ export default function HomePage() {
         </details>
         ) : null}
 
+        <div className="col-strip">
         <p className="global-stats-line" aria-label="샘링크 통계">
           지금까지 <strong>{stats.createdCount.toLocaleString()}개</strong>의 단축 주소가 만들어졌고, 현재{" "}
           <strong>{stats.activeCount.toLocaleString()}개</strong>가 사용 중이에요.
@@ -1881,6 +1895,7 @@ export default function HomePage() {
             <span className="partner-link-arrow" aria-hidden="true">↗</span>
           </a>
         </nav>
+        </div>
       </section>
 
       {!isEmbedded ? <footer className="site-footer" aria-label="사업자 정보">
