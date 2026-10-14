@@ -31,7 +31,7 @@ test('직접 연결 API 는 state 를 확인한 뒤에만 연결하고 실패해
     readFile('app/account-bar.tsx', 'utf8'),
     readFile('app/connect/page.tsx', 'utf8'),
   ]);
-  assert.match(connect, /connectStateMatches\(body\.state, readConnectStateCookie\(request\)\)/);
+  assert.match(connect, /connectStateMatches\(body\.state, cookieState\)/);
   assert.match(connect, /status: 403/);
   assert.match(connect, /clearConnectStateCookie/);
   assert.doesNotMatch(embed, /connectState|connect-state/, 'embed 길은 state 를 쓰지 않는다');

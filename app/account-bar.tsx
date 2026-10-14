@@ -12,7 +12,7 @@ const RESTART_PARAM = "samlink-restart";
 
 type AccountState = { connected: boolean; displayName?: string };
 
-type ConnectResult = { error?: string; displayName?: string; moved?: number };
+type ConnectResult = { error?: string; reason?: string; displayName?: string; moved?: number };
 
 async function postConnect(path: string, body: Record<string, string>) {
   const response = await fetch(path, {
@@ -21,7 +21,7 @@ async function postConnect(path: string, body: Record<string, string>) {
     body: JSON.stringify(body),
   });
   const data = (await response.json().catch(() => ({}))) as ConnectResult;
-  if (!response.ok) throw new Error(data.error || "연결하지 못했습니다.");
+  if (!response.ok) throw new Error(`${data.error || "연결하지 못했습니다."}${data.reason ? ` (사유: ${data.reason})` : ""}`);
   return data;
 }
 
