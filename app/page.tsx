@@ -1525,6 +1525,7 @@ export default function HomePage() {
               <span className="feature-brief-pill">QR 코드 PiP 모드 지원</span>
               <span className="feature-brief-pill">폴더별 링크 정리</span>
               <span className="feature-brief-pill">다른 기기로 링크 복사</span>
+              <span className="feature-brief-pill">한글 주소 이름 지원</span>
             </div>
           </aside>
         </section>

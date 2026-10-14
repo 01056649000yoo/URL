@@ -92,11 +92,13 @@ export function AccountBar({ isEmbedded, onChanged, onStatus }: { isEmbedded: bo
   if (account.connected) {
     return (
       <div className="account-bar is-connected" role="status">
-        <span className="account-bar-icon" aria-hidden="true">✅</span>
-        <span className="account-bar-text">
+        <div className="account-bar-head">
+          <span className="account-bar-icon" aria-hidden="true">✅</span>
           <strong>아지트 {account.displayName} 계정에 저장 중</strong>
-          <small>다른 컴퓨터에서도 아지트 계정으로 연결하면 같은 링크 목록이 그대로 보여요.</small>
-        </span>
+        </div>
+        <ul className="account-bar-points">
+          <li>어느 기기에서든 같은 링크 목록이 보여요</li>
+        </ul>
         {!isEmbedded ? (
           <button type="button" className="account-bar-action is-quiet" onClick={disconnect}>연결 해제</button>
         ) : null}
@@ -104,16 +106,26 @@ export function AccountBar({ isEmbedded, onChanged, onStatus }: { isEmbedded: bo
     );
   }
 
+
   // 아지트 안에서 연결이 안 된 경우(학생 계정 등)는 아무것도 보이지 않는다.
   if (isEmbedded) return null;
 
   return (
     <div className="account-bar">
-      <span className="account-bar-icon" aria-hidden="true">✏️</span>
-      <span className="account-bar-text">
-        <strong>지금은 내 링크가 이 브라우저에만 저장돼요</strong>
-        <small>{notice || "다른 컴퓨터나 브라우저에서는 보이지 않고, 쿠키를 지우면 사라져요. 끄적끄적아지트 선생님 계정으로 연결하면 어디서든 내 링크가 그대로 보여요."}</small>
-      </span>
+      <div className="account-bar-head">
+        <span className="account-bar-icon" aria-hidden="true">☁️</span>
+        <strong>어디서든 내 링크 보기</strong>
+      </div>
+      <ul className="account-bar-points">
+        {notice ? (
+          <li>{notice}</li>
+        ) : (
+          <>
+            <li>지금은 이 브라우저에만 저장돼요</li>
+            <li>다른 기기에선 안 보이고, 쿠키를 지우면 사라져요</li>
+          </>
+        )}
+      </ul>
       <button type="button" className="account-bar-action" onClick={startConnect}>아지트 계정으로 연결</button>
     </div>
   );
