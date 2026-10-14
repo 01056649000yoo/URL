@@ -662,14 +662,20 @@ export default function HomePage() {
   const selectedManagedLink = mergedLinks.find((link) => link.slug === selectedSavedSlug) ?? null;
   const selectedIsOwner = selectedManagedLink?.isOwner !== false;
 
+  // 안전 검사로 멈춘 링크(비활성)는 목록에서 빼고 아래 접힌 "멈춘 링크"에만 모읍니다.
+  const activeLinks = mergedLinks.filter((link) => link.isActive !== false);
+  const stoppedLinks = mergedLinks.filter((link) => link.isActive === false);
   const creationModeLinks = createMode === "bundle"
-    ? mergedLinks.filter((link) => link.isBundle)
-    : mergedLinks.filter((link) => !link.isBundle);
+    ? activeLinks.filter((link) => link.isBundle)
+    : activeLinks.filter((link) => !link.isBundle);
+  const stoppedModeLinks = createMode === "bundle"
+    ? stoppedLinks.filter((link) => link.isBundle)
+    : stoppedLinks.filter((link) => !link.isBundle);
   const folderBySlug = new Map<string, string>();
   for (const folder of linkFolders) {
     for (const slug of folder.slugs) folderBySlug.set(slug, folder.id);
   }
-  const unfiledLinks = mergedLinks.filter((link) => !folderBySlug.has(link.slug));
+  const unfiledLinks = activeLinks.filter((link) => !folderBySlug.has(link.slug));
 
   useEffect(() => {
     setPendingDeleteSlug(null);
@@ -1698,6 +1704,14 @@ export default function HomePage() {
                   : "아직 만든 링크가 없습니다. 위에서 단축링크를 만들면 여기에 보입니다."}
               </p>
             )}
+            {!collapsedLists[createMode] && stoppedModeLinks.length ? (
+              <details className="stopped-links">
+                <summary>멈춘 링크 {stoppedModeLinks.length}개 (안전 검사로 사용이 중지됨)</summary>
+                <div className="saved-links-list">
+                  {stoppedModeLinks.map((link) => renderManagedLink(link, false))}
+                </div>
+              </details>
+            ) : null}
           </section>
         ) : null}
 
@@ -1732,7 +1746,7 @@ export default function HomePage() {
           {mergedLinks.length || linkFolders.length ? (
             <div className="link-folder-board">
               {linkFolders.map((folder) => {
-                const folderLinks = mergedLinks.filter((link) => folder.slugs.includes(link.slug));
+                const folderLinks = activeLinks.filter((link) => folder.slugs.includes(link.slug));
                 const isExpanded = expandedFolderIds.includes(folder.id);
                 return (
                   <section
@@ -1786,7 +1800,7 @@ export default function HomePage() {
                 }}
               >
                 <div className="link-folder-head">
-                  <div><span className="link-folder-icon">🗂️</span><strong>미분류</strong><span>{mergedLinks.filter((link) => !folderBySlug.has(link.slug)).length}개</span></div>
+                  <div><span className="link-folder-icon">🗂️</span><strong>미분류</strong><span>{unfiledLinks.length}개</span></div>
                 </div>
                 <div className="saved-links-list">
                   {unfiledLinks.length ? unfiledLinks.map((link) => renderManagedLink(link)) : (
@@ -1802,6 +1816,14 @@ export default function HomePage() {
               아직 만든 링크가 없습니다. 단축링크를 만들면 여기에 자동으로 보관됩니다.
             </p>
           )}
+          {stoppedLinks.length ? (
+            <details className="stopped-links">
+              <summary>멈춘 링크 {stoppedLinks.length}개 (안전 검사로 사용이 중지됨)</summary>
+              <div className="saved-links-list">
+                {stoppedLinks.map((link) => renderManagedLink(link))}
+              </div>
+            </details>
+          ) : null}
         </section>
         ) : null}
 

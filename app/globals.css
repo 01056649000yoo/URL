@@ -2285,3 +2285,20 @@ textarea {
 .list-collapse-toggle:hover {
   background: rgba(0, 0, 0, 0.05);
 }
+
+/* 안전 검사로 멈춘 링크: 기본은 접어 둡니다 */
+.stopped-links {
+  margin-top: 12px;
+  border-top: 1px dashed var(--line, rgba(0, 0, 0, 0.15));
+  padding-top: 10px;
+}
+.stopped-links summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.stopped-links .saved-links-list {
+  margin-top: 10px;
+  opacity: 0.8;
+}
