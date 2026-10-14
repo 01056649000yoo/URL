@@ -102,8 +102,12 @@ export default async function BundlePage({ params }: PageProps) {
         <div className="bundle-list">
           {items.map((item, index) => {
             let hostLabel = "";
+            let safeHref = "#";
             try {
-              hostLabel = new URL(item.url as string).hostname;
+              const parsedItem = new URL(item.url as string);
+              hostLabel = parsedItem.hostname;
+              // 저장할 때 http·https 만 받지만, 화면에서도 한 번 더 확인한다(javascript: 같은 주소는 열지 않는다).
+              if (parsedItem.protocol === "http:" || parsedItem.protocol === "https:") safeHref = parsedItem.toString();
             } catch {
               hostLabel = "";
             }
@@ -111,7 +115,7 @@ export default async function BundlePage({ params }: PageProps) {
               <a
                 className="bundle-item"
                 key={`${item.url}-${index}`}
-                href={item.url}
+                href={safeHref}
                 target="_blank"
                 rel="noreferrer"
               >

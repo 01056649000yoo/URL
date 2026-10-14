@@ -37,7 +37,9 @@ test('직접 연결 API 는 state 를 확인한 뒤에만 연결하고 실패해
   assert.doesNotMatch(embed, /connectState|connect-state/, 'embed 길은 state 를 쓰지 않는다');
   assert.match(start, /setConnectStateCookie/);
   assert.match(bar, /connect-start/);
-  assert.match(bar, /state \? "\/api\/account\/connect" : "\/api\/account\/connect-embed"/);
+  assert.match(bar, /postConnect\("\/api\/account\/connect", \{ ticket, state \}\)/);
+  assert.match(bar, /connectEmbedded\(data\.ticket\)/);
+  assert.doesNotMatch(bar, /state \? "\/api\/account\/connect"/);
   assert.match(page, /params\.get\("state"\)/);
   assert.match(page, /connectWithTicket\(ticket, state\)/);
 });

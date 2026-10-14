@@ -46,6 +46,15 @@ export function getVisitorCookieMaxAge() {
   return VISITOR_COOKIE_MAX_AGE;
 }
 
+// 2026-10-14 점검: Referer 전체(경로·쿼리)에는 학생 식별자·토큰이 들어 있을 수 있고 화면에서 쓰지도 않는다. 출처(주소의 앞부분)만 남긴다.
 export function getRequestReferrer(request: Request) {
-  return request.headers.get("referer")?.trim() || null;
+  const raw = request.headers.get("referer")?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return parsed.origin.slice(0, 200);
+  } catch {
+    return null;
+  }
 }

@@ -652,7 +652,7 @@ revoke execute on function public.admin_delete_short_links(bigint[]) from public
 revoke execute on function public.claim_device_link_transfer(text, text) from public, anon, authenticated;
 revoke execute on function public.increment_deleted_short_links(integer) from public, anon, authenticated;
 revoke execute on function public.increment_created_short_links(integer) from public, anon, authenticated;
-revoke execute on function public.consume_short_link_rate_limit(text) from public, anon, authenticated;
+revoke execute on function public.consume_short_link_rate_limit(text, text) from public, anon, authenticated;
 revoke execute on function public.consume_page_visit_rate_limit(text) from public, anon, authenticated;
 revoke execute on function public.get_link_visit_stats(timestamptz, timestamptz, bigint) from public, anon, authenticated;
 revoke execute on function public.get_global_visit_stats(timestamptz, timestamptz) from public, anon, authenticated;
@@ -672,7 +672,7 @@ revoke execute on function public.sync_original_link_device_access() from public
 revoke execute on function public.consume_admin_login_rate_limit(text) from public, anon, authenticated;
 grant execute on function public.increment_deleted_short_links(integer) to service_role;
 grant execute on function public.increment_created_short_links(integer) to service_role;
-grant execute on function public.consume_short_link_rate_limit(text) to service_role;
+grant execute on function public.consume_short_link_rate_limit(text, text) to service_role;
 grant execute on function public.consume_page_visit_rate_limit(text) to service_role;
 grant execute on function public.get_link_visit_stats(timestamptz, timestamptz, bigint) to service_role;
 grant execute on function public.get_global_visit_stats(timestamptz, timestamptz) to service_role;

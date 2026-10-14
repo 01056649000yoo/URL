@@ -11,16 +11,29 @@ const AGIT_CONNECT_URL = `${AGIT_ORIGIN}/?samlink-connect=1`;
 
 type AccountState = { connected: boolean; displayName?: string };
 
-// state 가 있으면 샘링크.kr 직접 연결(/api/account/connect), 없으면 아지트 안 자동 연결(/api/account/connect-embed).
-export async function connectWithTicket(ticket: string, state?: string) {
-  const response = await fetch(state ? "/api/account/connect" : "/api/account/connect-embed", {
+type ConnectResult = { error?: string; displayName?: string; moved?: number };
+
+async function postConnect(path: string, body: Record<string, string>) {
+  const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(state ? { ticket, state } : { ticket }),
+    body: JSON.stringify(body),
   });
-  const data = (await response.json().catch(() => ({}))) as { error?: string; displayName?: string; moved?: number };
+  const data = (await response.json().catch(() => ({}))) as ConnectResult;
   if (!response.ok) throw new Error(data.error || "연결하지 못했습니다.");
   return data;
+}
+
+// 샘링크.kr 에서 직접 누른 연결: state 가 꼭 있어야 한다. state 가 없으면 서버로 보내지 않고 멈춘다
+// (2026-10-14 점검: 예전에는 state 가 없으면 state 를 안 보는 아지트 안 연결 길로 넘어가, 남이 만든 `/connect#ticket=…` 주소로 연결이 바뀔 수 있었다).
+export async function connectWithTicket(ticket: string, state: string) {
+  if (!state) throw new Error("연결 요청이 이 브라우저에서 시작한 것이 아닙니다. 쌤링크 첫 화면에서 '아지트 계정으로 연결'을 다시 눌러 주세요.");
+  return postConnect("/api/account/connect", { ticket, state });
+}
+
+// 아지트 안(iframe) 자동 연결: 부모 창이 아지트일 때만 이 화면이 부른다(아래 message 처리). /connect 화면에서는 쓰지 않는다.
+export async function connectEmbedded(ticket: string) {
+  return postConnect("/api/account/connect-embed", { ticket });
 }
 
 export function AccountBar({ isEmbedded, onChanged, onStatus }: { isEmbedded: boolean; onChanged: () => void; onStatus?: (connected: boolean) => void }) {
@@ -55,7 +68,7 @@ export function AccountBar({ isEmbedded, onChanged, onStatus }: { isEmbedded: bo
       if (data?.type !== "samlink:ticket" || typeof data.ticket !== "string") return;
       window.removeEventListener("message", onMessage);
       try {
-        const result = await connectWithTicket(data.ticket);
+        const result = await connectEmbedded(data.ticket);
         setAccount({ connected: true, displayName: result.displayName });
         onChangedRef.current();
       } catch {

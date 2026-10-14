@@ -34,13 +34,9 @@ function isOwnShortUrl(data: string, request: Request) {
   } catch {
     // SITE_URL이 잘못돼도 요청 호스트 기준 검증은 계속합니다.
   }
-  // Next.js는 request.url의 호스트를 실제 접속 호스트로 보장하지 않으므로
-  // Host 헤더(프록시 뒤에서는 x-forwarded-host)를 직접 읽습니다.
-  const forwardedHost =
-    process.env.TRUST_PROXY_HEADERS === "true"
-      ? request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
-      : null;
-  const hostHeader = forwardedHost || request.headers.get("host")?.trim();
+  // 2026-10-14 점검: 운영에서는 요청 머리글(Host·X-Forwarded-Host)을 믿지 않는다 — 보내는 쪽이 아무 주소나 "자기 주소"로 속여
+  // 남의 주소 QR 을 마음대로 만들 수 있었다. 운영은 SITE_URL 하나만, 개발·내부 시험에서만 접속 호스트도 인정한다.
+  const hostHeader = process.env.NODE_ENV === "production" ? null : request.headers.get("host")?.trim();
   if (hostHeader) {
     try {
       const requestHost = new URL(`http://${hostHeader}`).hostname;

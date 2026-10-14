@@ -8,6 +8,7 @@ import { grantAccountAccess } from "@/lib/link-ownership";
 import { getDeviceRateLimitKey, getRateLimitKey } from "@/lib/rate-limit";
 import { checkUrlsSafety, describeThreat } from "@/lib/safe-browsing";
 import { getBaseUrl } from "@/lib/site-url";
+import { serverError } from "@/lib/api-error";
 
 type BundleItemPayload = {
   label?: string;
@@ -25,6 +26,9 @@ type CreateLinkPayload = {
 
 const BUNDLE_MIN_ITEMS = 2;
 const BUNDLE_MAX_ITEMS = 8;
+// 2026-10-14 점검: 주소·본문 길이 상한이 없어 아주 긴 주소로 표와 재검사 작업을 키울 수 있었다.
+const MAX_URL_LENGTH = 2048;
+const MAX_BODY_BYTES = 64 * 1024;
 
 function toDisplayUrl(shortUrl: string) {
   try {
@@ -53,6 +57,9 @@ function buildBundlePayload(title: string | undefined, items: BundleItemPayload[
     const rawUrl = item.url?.trim();
     if (!rawUrl) {
       return { error: "묶음에 포함된 주소를 모두 입력해 주세요." } as const;
+    }
+    if (rawUrl.length > MAX_URL_LENGTH) {
+      return { error: `주소는 ${MAX_URL_LENGTH}자 이하여야 합니다.` } as const;
     }
 
     let parsed: URL;
@@ -97,7 +104,16 @@ function retentionDaysFromPeriod(period: CreateLinkPayload["retentionPeriod"]) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as CreateLinkPayload;
+    const rawBody = await request.text();
+    if (rawBody.length > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "요청이 너무 큽니다." }, { status: 413 });
+    }
+    let body: CreateLinkPayload;
+    try {
+      body = JSON.parse(rawBody) as CreateLinkPayload;
+    } catch {
+      return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
+    }
     const destination = body.destination?.trim();
     const suppliedSlug = body.slug?.trim();
     const { deviceId } = getOrCreateDeviceId(request);
@@ -118,6 +134,10 @@ export async function POST(request: NextRequest) {
     } else {
       if (!destination) {
         return NextResponse.json({ error: "원본 주소를 입력해 주세요." }, { status: 400 });
+      }
+
+      if (destination.length > MAX_URL_LENGTH) {
+        return NextResponse.json({ error: `원본 주소는 ${MAX_URL_LENGTH}자 이하여야 합니다.` }, { status: 400 });
       }
 
       try {
@@ -168,10 +188,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (rateLimitError) {
-      return NextResponse.json(
-        { error: `속도 제한을 확인하지 못했습니다. ${rateLimitError.message}` },
-        { status: 500 },
-      );
+      return serverError(rateLimitError, "shorten:rate-limit");
     }
 
     const rateLimit = Array.isArray(rateLimitData) ? rateLimitData[0] : rateLimitData;
@@ -238,10 +255,7 @@ export async function POST(request: NextRequest) {
 
       const duplicate = error.code === "23505";
       if (!duplicate) {
-        return NextResponse.json(
-          { error: `단축 링크를 저장하지 못했습니다. ${error.message}` },
-          { status: 500 },
-        );
+        return serverError(error, "shorten:insert");
       }
 
       if (suppliedSlug) {
@@ -286,7 +300,6 @@ export async function POST(request: NextRequest) {
     setDeviceCookie(response, deviceId);
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "shorten");
   }
 }
