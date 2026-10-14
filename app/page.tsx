@@ -1742,13 +1742,22 @@ export default function HomePage() {
                 </button>
               </div>
 
-              <button className="qr-launch" type="button" onClick={() => setIsQrOpen(true)}>
-                <div className="qr-launch-copy">
-                  <span className="qr-launch-label">QR 코드 보기</span>
-                  <span className="qr-launch-hint">누르면 크게 열립니다</span>
+              <div className="qr-panel">
+                <div className="qr-panel-copy">
+                  <span className="qr-launch-label">QR 코드</span>
+                  <span className="qr-launch-hint">수업 자료에 붙이거나 화면에 띄워 보여 주세요</span>
+                  {result.expiresAt ? (
+                    <span className="qr-panel-expiry">만료 예정 {formatDateTime(result.expiresAt)}</span>
+                  ) : null}
+                  <div className="qr-actions">
+                    <button className="qr-open" type="button" onClick={() => setIsQrOpen(true)}>크게 보기</button>
+                    <a className="qr-save" href={qrDownloadUrl} download={`samlink-qr-${result.slug ?? "code"}.png`}>이미지 저장</a>
+                  </div>
                 </div>
-                <img className="qr-thumb" src={qrImageUrl} alt="단축링크 QR 코드" />
-              </button>
+                <button className="qr-thumb-button" type="button" onClick={() => setIsQrOpen(true)} aria-label="QR 코드 크게 보기">
+                  <img className="qr-thumb" src={qrImageUrl} alt="단축링크 QR 코드" />
+                </button>
+              </div>
 
               {result.expiresAt ? (
                 <p className="result-meta">만료 예정: {formatDateTime(result.expiresAt)}</p>
