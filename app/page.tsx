@@ -678,6 +678,12 @@ export default function HomePage() {
     }
 
     for (const link of myLinks) {
+      // 멈춘 링크(아지트 연구소에서 끈 개요 모음, 관리자가 멈춘 링크 등)는 목록에서 뺍니다.
+      // 브라우저 저장 링크도 통계에서 멈춘 것으로 나오면 빼므로 같은 기준입니다. 다시 살리는 길이 없어 남겨 둘 이유가 없습니다.
+      if (link.isActive === false) {
+        map.delete(link.slug);
+        continue;
+      }
       const existing = map.get(link.slug);
       if (existing) {
         existing.expiresAt = link.expiresAt ?? existing.expiresAt;
