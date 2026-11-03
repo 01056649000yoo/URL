@@ -2073,6 +2073,24 @@ export default function HomePage() {
               </button>
               <div className="stage-actions">
                 <button className="qr-open" type="button" onClick={() => setIsQrOpen(true)}>크게 보기</button>
+                <div className="stage-actions-pair">
+                  <button
+                    className="qr-save"
+                    type="button"
+                    onClick={() => window.open(`/present/${encodeURIComponent(result.slug)}`, "_blank")}
+                    title="프로젝터·전자칠판용 전체화면으로 큰 QR과 주소, 실시간 입장 인원을 보여줍니다."
+                  >
+                    🎬 발표 모드
+                  </button>
+                  <button
+                    className="qr-save"
+                    type="button"
+                    onClick={() => void handleSystemAlwaysOnTop(resultUrl, result.slug)}
+                    title="PPT, 한글, 다른 웹사이트 등 어떤 화면을 열어도 항상 화면 가장 위에 떠 있습니다(Chrome·Edge)."
+                  >
+                    🖥️ 항상 위에
+                  </button>
+                </div>
                 <a className="qr-save" href={qrDownloadUrl} download={`samlink-qr-${result.slug ?? "code"}.png`}>이미지 저장</a>
               </div>
               <div className="stage-stats" aria-label="방금 만든 링크 통계">
@@ -2426,29 +2444,28 @@ export default function HomePage() {
               const badge = expired ? null : getExpiryBadge(effectiveExpiresAt);
 
               return (
-                <div className="expiry-row">
-                  <p className="result-meta">
-                    {expired ? (
-                      <>
-                        만료됨:{" "}
+                <div className={expired ? "expiry-row is-expired" : "expiry-row"}>
+                  <div className="expiry-info">
+                    <span className="expiry-label">{expired ? "만료됨" : "만료 예정"}</span>
+                    <span className="expiry-value">
+                      {expired ? (
                         <span className="expiry-badge urgent">
                           {getGraceDaysLeft(effectiveExpiresAt)}일 뒤 완전 삭제
                         </span>
-                      </>
-                    ) : (
-                      <>
-                        만료 예정: {formatDateTime(effectiveExpiresAt)}
-                        {badge ? (
-                          <span className={badge.urgent ? "expiry-badge urgent" : "expiry-badge"}>
-                            {" "}
-                            ⏳ {badge.text}
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </p>
+                      ) : (
+                        <>
+                          {formatDateTime(effectiveExpiresAt)}
+                          {badge ? (
+                            <span className={badge.urgent ? "expiry-badge urgent" : "expiry-badge"}>
+                              ⏳ {badge.text}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </span>
+                  </div>
                   <button
-                    className="mini-button"
+                    className="mini-button expiry-extend"
                     type="button"
                     disabled={isExtending}
                     onClick={() => extendSavedLink(selectedSavedLink.slug)}

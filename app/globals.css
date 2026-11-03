@@ -1270,25 +1270,29 @@ textarea {
   gap: 12px;
 }
 
+/* 2026-11-03: 여섯 개를 한 줄에 넣어 글자가 작던 것을 세 개씩 두 줄로(휴대폰은 두 개씩) */
 .saved-link-qr-header .saved-link-actions {
   display: grid;
-  grid-template-columns: repeat(6, minmax(88px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   width: 100%;
-  overflow-x: auto;
-  padding-bottom: 2px;
 }
 
 .saved-link-qr-header .mini-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-width: 0;
-  padding: 10px 5px;
-  font-size: 0.72rem;
-  line-height: 1.15;
+  min-height: 44px;
+  padding: 10px 8px;
+  font-size: 0.9375rem;
+  line-height: 1.2;
   white-space: nowrap;
   text-decoration: none;
+}
+@media (max-width: 480px) {
+  .saved-link-qr-header .saved-link-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .saved-link-modal > .saved-link-actions {
@@ -1799,13 +1803,24 @@ textarea {
   border-color: rgba(239, 68, 68, 0.35);
 }
 
+/* 2026-11-03: 만료 줄 — 왼쪽이 비어 보이던 것을 '만료 예정' 이름표 + 큰 날짜로, 연장 버튼과 한 상자에 */
 .expiry-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px 16px;
   flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f6f8fe;
 }
+.expiry-row.is-expired { background: #fff5f5; border-color: rgba(239, 68, 68, 0.3); }
+.expiry-info { display: grid; gap: 4px; min-width: 0; }
+.expiry-label { font-size: 0.8125rem; font-weight: 800; color: var(--muted); letter-spacing: 0.04em; }
+.expiry-value { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 1.125rem; font-weight: 800; letter-spacing: 0.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+.expiry-value .expiry-badge { font-size: 0.8125rem; letter-spacing: 0; }
+.expiry-row .expiry-extend { min-height: 44px; padding: 10px 16px; font-size: 0.9375rem; white-space: nowrap; }
 
 .extend-notice {
   margin: 0;
@@ -2620,9 +2635,10 @@ body { height: auto; overflow: visible; }
 .home-stage { position: sticky; top: 16px; min-width: 0; container-type: inline-size; }
 .stage-card {
   display: grid;
-  grid-template-columns: 46cqw minmax(0, 1fr);
-  grid-template-areas: "head head" "link link" "qr actions" "qr stats";
-  grid-template-rows: auto auto 1fr 1fr;
+  grid-template-columns: 40cqw minmax(0, 1fr);
+  /* 2026-11-03: 오른쪽에 발표 모드·항상 위에를 더해 통계는 QR 아래 한 줄로 */
+  grid-template-areas: "head head" "link link" "qr actions" "stats stats";
+  grid-template-rows: auto auto auto auto;
   gap: min(3cqw, 18px) min(4cqw, 24px);
   padding: min(4.5cqw, 26px);
   border-radius: 4cqw;
@@ -2664,23 +2680,20 @@ body { height: auto; overflow: visible; }
 }
 .stage-qr img { display: block; width: 100%; height: 100%; }
 .stage-qr.is-placeholder { border: 2px dashed #c4cee3; background: #f6f8fe; cursor: default; font-size: 7cqw; }
-.stage-actions { grid-area: actions; display: flex; flex-direction: column; justify-content: flex-end; gap: 2cqw; }
+.stage-actions { grid-area: actions; display: flex; flex-direction: column; justify-content: center; gap: 2cqw; }
 .stage-actions .qr-open,
-.stage-actions .qr-save { width: 100%; height: max(40px, 9cqw); padding: 0 2cqw; border-radius: 2.4cqw; font-size: max(0.9375rem, 3cqw); }
-.stage-stats { grid-area: stats; display: flex; flex-direction: column; justify-content: flex-start; gap: 1.4cqw; font-size: max(0.8125rem, 2.6cqw); color: var(--muted); font-weight: 700; }
-.stage-stats span { display: flex; justify-content: space-between; align-items: baseline; gap: 2cqw; padding: 1.4cqw 2.6cqw; border-radius: 2cqw; background: #f3f6fd; }
+.stage-actions .qr-save { width: 100%; height: max(40px, 8.4cqw); padding: 0 1.4cqw; border-radius: 2.4cqw; font-size: max(0.9375rem, 2.9cqw); }
+.stage-actions-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2cqw; }
+.stage-actions-pair .qr-save { font-size: max(0.875rem, 2.6cqw); white-space: nowrap; }
+.stage-stats { grid-area: stats; display: flex; flex-direction: row; gap: 2cqw; font-size: max(0.8125rem, 2.5cqw); color: var(--muted); font-weight: 700; }
+.stage-stats span { flex: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 2cqw; padding: 1.4cqw 2.6cqw; border-radius: 2cqw; background: #f3f6fd; }
 .stage-stats strong { color: var(--text); font-size: 1.35em; font-variant-numeric: tabular-nums; }
 .stage-empty-text { grid-area: text; align-self: center; margin: 0; word-break: keep-all; color: var(--muted); font-size: max(0.875rem, 3cqw); font-weight: 700; line-height: 1.5; }
 
 /* 좁은 무대(휴대폰 등): 버튼은 QR 옆, 통계는 QR 아래 가로 한 줄 — QR 옆이 넘치지 않게 */
 @container (max-width: 460px) {
-  .stage-card:not(.is-empty) {
-    grid-template-areas: "head head" "link link" "qr actions" "stats stats";
-    grid-template-rows: auto auto auto auto;
-  }
-  .stage-actions { justify-content: center; }
-  .stage-stats { flex-direction: row; }
-  .stage-stats span { flex: 1; flex-direction: column; align-items: center; gap: 0; }
+  .stage-actions-pair { grid-template-columns: minmax(0, 1fr); }
+  .stage-stats span { flex-direction: column; align-items: center; gap: 0; }
 }
 
 /* 키보드로 옮겨 다닐 때 보이는 테두리 */
@@ -2689,6 +2702,7 @@ body { height: auto; overflow: visible; }
 .stage-link:focus-visible,
 .stage-actions .qr-open:focus-visible,
 .stage-actions .qr-save:focus-visible,
+.stage-actions-pair .qr-save:focus-visible,
 .list-more:focus-visible,
 .row-stage:focus-visible,
 .row-copy:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
