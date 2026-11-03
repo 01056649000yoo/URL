@@ -2196,6 +2196,28 @@ textarea {
 .present-target-control input { width: 92px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; font: inherit; text-align: center; }
 .present-target-control button { padding: 9px 13px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; font-weight: 800; cursor: pointer; }
 .present-target-control .present-target-clear { background: #e2e8f0; color: #475569; }
+.present-target-control .present-sound-toggle { background: #fff; color: var(--brand-strong); border: 1.5px solid var(--brand); }
+.present-target-control .present-sound-toggle[aria-pressed="false"] { color: #64748b; border-color: #cbd5e1; }
+
+/* 목표 인원 알림 띠(2026-11-03): 위쪽에 크게, QR 은 가리지 않는다 */
+.present-goal-banner {
+  position: fixed; top: max(16px, env(safe-area-inset-top, 0px)); left: 50%; z-index: 50;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 16px; max-width: calc(100% - 32px);
+  padding: 14px 18px 14px 24px; border-radius: 18px;
+  background: #16a34a; color: #fff; box-shadow: 0 18px 40px -16px rgba(22, 101, 52, 0.6);
+  font-size: clamp(1.1rem, 2.8vw, 1.9rem); font-weight: 900; line-height: 1.3;
+  animation: present-goal-in 0.5s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+.present-goal-banner strong { font-size: 1.15em; }
+.present-goal-banner button {
+  flex: none; padding: 8px 14px; border: 0; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.22); color: #fff; font: inherit; font-size: 0.55em; font-weight: 800; cursor: pointer;
+}
+@keyframes present-goal-in { from { opacity: 0; transform: translate(-50%, -24px) scale(0.92); } }
+@media (prefers-reduced-motion: reduce) { .present-goal-banner { animation: none; } }
+/* 띠가 떠 있는 동안 QR 을 가리지 않게 내용을 아래로 */
+.present-shell.has-goal-banner { padding-top: calc(clamp(1.1rem, 2.8vw, 1.9rem) * 1.3 + 72px); transition: padding-top 0.3s ease; }
 
 .present-counter-dot {
   width: 10px;
