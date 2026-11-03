@@ -11,7 +11,7 @@ type RouteContext = {
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const viewer = getViewer(request);
+    const viewer = await getViewer(request);
     if (viewer.isNewDevice && !viewer.userId) {
       return NextResponse.json({ error: "이 브라우저에서 만든 링크만 삭제할 수 있습니다." }, { status: 403 });
     }

@@ -22,14 +22,7 @@ async function cleanupExpiredLinks(request: Request) {
   return NextResponse.json({ deleted: deletedCount });
 }
 
-export async function GET(request: Request) {
-  try {
-    return await cleanupExpiredLinks(request);
-  } catch (error) {
-    return serverError(error, "cleanup-expired");
-  }
-}
-
+// GET 은 두지 않는다(2026-11-03 KISA 점검: GET 은 출처 검사를 건너뛰어 관리자 쿠키로 다른 사이트가 실행시킬 수 있었다).
 export async function POST(request: Request) {
   try {
     return await cleanupExpiredLinks(request);

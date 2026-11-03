@@ -25,7 +25,7 @@ function toDisplayUrl(shortUrl: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const viewer = getViewer(request);
+    const viewer = await getViewer(request);
     const { deviceId } = viewer;
     const admin = createAdminClient();
     const accessibleIds = await getAccessibleLinkIds(admin, viewer);

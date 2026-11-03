@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { serverError } from "@/lib/api-error";
+import { serverError, adminRouteError } from "@/lib/api-error";
 
 type LinkVisitStats = {
   link_id: number;
@@ -174,7 +174,6 @@ export async function GET(request: Request) {
       alerts,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 401 });
+    return adminRouteError(error, "admin/links");
   }
 }

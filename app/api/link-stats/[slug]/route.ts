@@ -21,7 +21,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { slug: rawSlug } = await context.params;
     const slug = decodeSlugParam(rawSlug);
-    const viewer = getViewer(request);
+    const viewer = await getViewer(request);
     const admin = createAdminClient();
     const recentThresholdIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const today = new Date();

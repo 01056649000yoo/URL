@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { serverError } from "@/lib/api-error";
+import { serverError, adminRouteError } from "@/lib/api-error";
 
 type RouteContext = {
   params: Promise<{
@@ -38,8 +38,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ link: data });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 401 });
+    return adminRouteError(error, "admin/links/[id]");
   }
 }
 
@@ -69,7 +68,6 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return NextResponse.json({ deleted: true, deletedCount });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 401 });
+    return adminRouteError(error, "admin/links/[id]");
   }
 }

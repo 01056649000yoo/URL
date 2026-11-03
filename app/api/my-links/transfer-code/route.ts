@@ -1,3 +1,4 @@
+import { serverError } from "@/lib/api-error";
 import { createHash, randomInt } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateDeviceId, setDeviceCookie } from "@/lib/device-cookie";
@@ -78,7 +79,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "이전 코드를 만들지 못했습니다." }, { status: 500 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "my-links/transfer-code");
   }
 }

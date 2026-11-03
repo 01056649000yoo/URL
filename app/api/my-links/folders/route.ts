@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { getViewer } from "@/lib/account-session";
+import { getViewer, type Viewer } from "@/lib/account-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { serverError } from "@/lib/api-error";
 import { sanitizeFolders, type LinkFolder } from "@/lib/link-folders";
@@ -11,7 +11,6 @@ import { sanitizeFolders, type LinkFolder } from "@/lib/link-folders";
 const MAX_BODY_BYTES = 128 * 1024;
 
 type AdminClient = ReturnType<typeof createAdminClient>;
-type Viewer = ReturnType<typeof getViewer>;
 
 /**
  * 이 계정(과 이 브라우저)이 볼 수 있는 링크만 폴더에 남긴다 — 지워진·남의 링크 주소는 저장하지 않는다.
@@ -82,7 +81,7 @@ async function readLimitedText(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const viewer = getViewer(request);
+    const viewer = await getViewer(request);
     if (!viewer.userId) return NextResponse.json({ error: "아지트 계정에 연결해 주세요." }, { status: 401 });
     const admin = createAdminClient();
     const current = await readCurrent(admin, viewer, viewer.userId);
@@ -94,7 +93,7 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const viewer = getViewer(request);
+    const viewer = await getViewer(request);
     if (!viewer.userId) return NextResponse.json({ error: "아지트 계정에 연결해 주세요." }, { status: 401 });
     const rawBody = await readLimitedText(request);
     if (rawBody === null) return NextResponse.json({ error: "폴더 정보가 너무 큽니다." }, { status: 413 });

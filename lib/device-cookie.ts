@@ -47,8 +47,8 @@ export function getOrCreateDeviceId(request: NextRequest) {
     };
   }
 
-  // 기존 브라우저의 UUID 쿠키는 권한을 유지한 채 다음 응답에서 서명 쿠키로 교체합니다.
-  if (/^device_[0-9a-f-]{36}$/.test(existing)) return { deviceId: existing, isNew: false };
+  // 서명 없는 옛 쿠키(2026-07-19 이전)는 더 인정하지 않는다(2026-11-03 KISA 점검: 기기 번호만 알면 사칭 가능).
+  // 그 뒤 한 번이라도 접속한 브라우저는 이미 서명 쿠키로 바뀌었다.
 
   return {
     deviceId: createDeviceId(),

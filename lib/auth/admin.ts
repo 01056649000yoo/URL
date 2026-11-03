@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
+/** 관리자 인증 실패(방문자에게 그대로 보여도 되는 문구). 그 밖의 오류는 serverError 로 일반 문구만 준다. */
+export class AdminAuthError extends Error {}
+
 export const ADMIN_SESSION_COOKIE = "samlink_admin_session";
 
 function getCookieValue(request: Request, name: string) {
@@ -28,7 +31,7 @@ export async function requireAdminUser(request: Request) {
   const headerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
   const token = headerToken || getCookieValue(request, ADMIN_SESSION_COOKIE);
   if (!token) {
-    throw new Error("로그인이 필요합니다.");
+    throw new AdminAuthError("로그인이 필요합니다.");
   }
 
   const supabase = createClient(url, anonKey, {
@@ -43,13 +46,14 @@ export async function requireAdminUser(request: Request) {
 
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) {
-    throw new Error("인증에 실패했습니다.");
+    throw new AdminAuthError("인증에 실패했습니다.");
   }
 
   const email = data.user.email?.trim().toLowerCase();
   if (email !== adminEmail) {
-    throw new Error("관리자 계정이 아닙니다.");
+    throw new AdminAuthError("관리자 계정이 아닙니다.");
   }
 
   return data.user;
 }
+

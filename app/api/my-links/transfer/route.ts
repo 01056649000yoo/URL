@@ -1,3 +1,4 @@
+import { serverError } from "@/lib/api-error";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateDeviceId, setDeviceCookie } from "@/lib/device-cookie";
@@ -56,7 +57,6 @@ export async function POST(request: NextRequest) {
       movedSlugs: Array.isArray(result.moved_slugs) ? result.moved_slugs : [],
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "my-links/transfer");
   }
 }

@@ -24,7 +24,7 @@ export async function redeemAndConnect(request: NextRequest, rawTicket: unknown,
       return NextResponse.json({ error: "연결 시간이 지났거나 이미 쓴 연결입니다. 아지트에서 다시 시도해 주세요." }, { status: 401 });
     }
 
-    const viewer = getViewer(request);
+    const viewer = await getViewer(request);
     const { data: deviceLinks, error: deviceError } = await admin
       .from("short_link_device_access")
       .select("link_id, short_links!inner(created_by)")

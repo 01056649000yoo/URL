@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { domainToUnicode } from "node:url";
 import QRCode from "qrcode";
 import { getBaseUrl } from "@/lib/site-url";
+import { getRateLimitKey } from "@/lib/rate-limit";
 
 const MAX_DATA_LENGTH = 2048;
 
@@ -54,6 +55,32 @@ function isOwnShortUrl(data: string, request: Request) {
   return allowedHosts.has(targetHost);
 }
 
+// 2026-11-03 KISA 점검(자동화 공격): QR 그림은 CPU 를 쓰므로 접속 주소(IP)별 1분 240장까지,
+// 같은 그림은 서버 메모리에 잠시 두어 다시 만들지 않는다. 한 서버(컨테이너 하나) 기준 메모리 한도라 충분하다.
+const QR_LIMIT_PER_MINUTE = 240;
+const qrHits = new Map<string, { windowStart: number; count: number }>();
+const qrCache = new Map<string, Buffer>();
+const QR_CACHE_MAX = 300;
+
+const QR_TRACKED_MAX = 20_000;
+
+function allowQr(request: Request) {
+  const key = getRateLimitKey(request);
+  const now = Date.now();
+  const hit = qrHits.get(key);
+  if (!hit || now - hit.windowStart >= 60_000) {
+    if (qrHits.size >= QR_TRACKED_MAX) {
+      // 지난 1분 밖의 기록만 지운다(전체를 지우면 다른 사람 제한까지 풀리던 문제, 외부 검토 반영).
+      for (const [oldKey, value] of qrHits) if (now - value.windowStart >= 60_000) qrHits.delete(oldKey);
+      if (qrHits.size >= QR_TRACKED_MAX) return false;
+    }
+    qrHits.set(key, { windowStart: now, count: 1 });
+    return true;
+  }
+  hit.count += 1;
+  return hit.count <= QR_LIMIT_PER_MINUTE;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const data = url.searchParams.get("data");
@@ -69,14 +96,20 @@ export async function GET(request: Request) {
     );
   }
 
+  // 잘못된 요청은 횟수에 넣지 않는다 — 올바른 QR 요청만 센다.
+  if (!allowQr(request)) {
+    return NextResponse.json({ error: "QR 코드를 너무 자주 만들었습니다. 잠시 후 다시 시도해 주세요." }, { status: 429, headers: { "Retry-After": "60" } });
+  }
+
   const size = sanitizeSize(url.searchParams.get("size"));
   // 기존 외부 API는 margin을 px로 받았으므로 모듈 단위(약 1/10)로 환산해 호환을 유지합니다.
   const marginPx = Math.min(Math.max(Number.parseInt(url.searchParams.get("margin") ?? "10", 10) || 10, 0), 40);
   const margin = Math.max(Math.round(marginPx / 10), 0);
 
-  let png: Buffer;
+  const cacheKey = `${size}|${margin}|${data}`;
+  let png: Buffer | undefined = qrCache.get(cacheKey);
   try {
-    png = await QRCode.toBuffer(data, {
+    png ??= await QRCode.toBuffer(data, {
       type: "png",
       width: size,
       margin,
@@ -88,6 +121,10 @@ export async function GET(request: Request) {
     });
   } catch {
     return NextResponse.json({ error: "QR 코드를 생성하지 못했습니다." }, { status: 500 });
+  }
+  if (!qrCache.has(cacheKey)) {
+    if (qrCache.size >= QR_CACHE_MAX) qrCache.delete(qrCache.keys().next().value as string);
+    qrCache.set(cacheKey, png);
   }
 
   return new NextResponse(new Uint8Array(png), {

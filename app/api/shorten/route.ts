@@ -212,7 +212,14 @@ export async function POST(request: NextRequest) {
     const urlsToCheck = isBundle
       ? (bundlePayload?.items ?? []).map((item) => item.url)
       : [(parsedUrl as URL).toString()];
+    const account = await readAccountSession(request);
     const safety = await checkUrlsSafety(urlsToCheck);
+    if (safety.unavailable) {
+      return NextResponse.json(
+        { error: "지금은 악성 주소 검사를 할 수 없어 잠시 만들 수 없어요. 1분쯤 뒤에 다시 만들어 주세요." },
+        { status: 503, headers: { "Retry-After": "60" } },
+      );
+    }
     if (!safety.safe) {
       return NextResponse.json(
         {
@@ -275,8 +282,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 아지트 계정에 연결돼 있으면 계정 목록에도 넣는다(다른 기기에서도 보이게, 2026-10-05).
-    const account = readAccountSession(request);
+    // 아지트 계정에 연결돼 있으면 계정 목록에도 넣는다(다른 기기에서도 보이게, 2026-10-05). 계정은 저장 전에 읽어 둔다.
     if (account) {
       try {
         await grantAccountAccess(admin, account.userId, [{ id: data.id, isOwner: true }]);

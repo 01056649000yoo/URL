@@ -1,3 +1,4 @@
+import { serverError } from "@/lib/api-error";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN_SESSION_COOKIE } from "@/lib/auth/admin";
@@ -12,9 +13,9 @@ type LoginPayload = {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as LoginPayload;
-    const email = body.email?.trim().toLowerCase();
-    const password = body.password ?? "";
+    const body = (await request.json().catch(() => null)) as LoginPayload | null;
+    const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body?.password === "string" ? body.password : "";
     const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
     const url = process.env.SUPABASE_INTERNAL_URL ?? process.env.SUPABASE_URL;
     const anonKey = process.env.SUPABASE_ANON_KEY;
@@ -84,7 +85,6 @@ export async function POST(request: Request) {
     });
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(error, "admin/login");
   }
 }

@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "연장할 링크를 찾을 수 없습니다." }, { status: 400 });
     }
 
-    const viewer = getViewer(request);
+    const viewer = await getViewer(request);
     const { deviceId } = viewer;
     if (viewer.isNewDevice && !viewer.userId) {
       return NextResponse.json(
