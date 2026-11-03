@@ -19,8 +19,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "올바른 링크 ID가 아닙니다." }, { status: 400 });
     }
 
-    const body = (await request.json()) as { isActive?: boolean };
-    if (typeof body.isActive !== "boolean") {
+    const body = (await request.json().catch(() => null)) as { isActive?: boolean } | null;
+    if (typeof body?.isActive !== "boolean") {
       return NextResponse.json({ error: "수정할 값이 없습니다." }, { status: 400 });
     }
 

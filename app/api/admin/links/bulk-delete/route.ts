@@ -11,9 +11,9 @@ export async function POST(request: Request) {
   try {
     await requireAdminUser(request);
 
-    const body = (await request.json()) as BulkDeletePayload;
-    const ids = Array.isArray(body.ids)
-      ? body.ids.filter((value): value is number => Number.isInteger(value))
+    const body = (await request.json().catch(() => null)) as BulkDeletePayload | null;
+    const ids = Array.isArray(body?.ids)
+      ? body!.ids.filter((value): value is number => Number.isInteger(value))
       : [];
 
     if (!ids.length) {

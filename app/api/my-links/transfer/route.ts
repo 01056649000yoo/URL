@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
       setDeviceCookie(response, deviceId);
       return response;
     };
-    const body = (await request.json()) as { code?: string };
-    const code = body.code?.replace(/\D/g, "") ?? "";
+    const body = (await request.json().catch(() => null)) as { code?: unknown } | null;
+    const code = typeof body?.code === "string" ? body.code.replace(/\D/g, "") : "";
     if (code.length !== 6) {
       return deviceResponse({ error: "6자리 이전 코드를 입력해 주세요." }, { status: 400 });
     }

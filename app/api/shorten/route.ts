@@ -54,7 +54,10 @@ function buildBundlePayload(title: string | undefined, items: BundleItemPayload[
 
   const cleanItems: { label: string; url: string }[] = [];
   for (const item of items) {
-    const rawUrl = item.url?.trim();
+    if (!item || typeof item !== "object" || typeof item.url !== "string" || (item.label !== undefined && item.label !== null && typeof item.label !== "string")) {
+      return { error: "묶음 항목 형식이 올바르지 않습니다." } as const;
+    }
+    const rawUrl = item.url.trim();
     if (!rawUrl) {
       return { error: "묶음에 포함된 주소를 모두 입력해 주세요." } as const;
     }
@@ -112,6 +115,15 @@ export async function POST(request: NextRequest) {
     try {
       body = JSON.parse(rawBody) as CreateLinkPayload;
     } catch {
+      return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
+    }
+    // 글자 자리에 다른 형식이 오면 400(2026-11-03 배포 점검: 객체를 넣으면 500 이 나던 문제).
+    const fields = body as unknown as Record<string, unknown> | null;
+    if (
+      !fields || typeof fields !== "object" || Array.isArray(fields) ||
+      ["destination", "slug", "retentionPeriod", "bundleTitle"].some((key) => fields[key] !== undefined && fields[key] !== null && typeof fields[key] !== "string") ||
+      (fields.bundleItems !== undefined && !Array.isArray(fields.bundleItems))
+    ) {
       return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
     }
     const destination = body.destination?.trim();

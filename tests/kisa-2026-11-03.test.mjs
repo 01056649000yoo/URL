@@ -68,3 +68,12 @@ test('만료 정리는 POST 만, QR 은 횟수 제한, 별명은 만든 사람�
   assert.match(await readFile('app/api/qr/route.ts', 'utf8'), /QR_LIMIT_PER_MINUTE/);
   assert.match(await readFile('app/api/my-links/label/route.ts', 'utf8'), /if \(!access\.isOwner\)/);
 });
+
+test('형식이 틀린 요청은 500 이 아니라 400(배포 점검에서 발견)', async () => {
+  const shorten = await readFile('app/api/shorten/route.ts', 'utf8');
+  assert.match(shorten, /\["destination", "slug", "retentionPeriod", "bundleTitle"\]\.some/);
+  assert.match(shorten, /typeof item\.url !== "string"/);
+  for (const file of ['app/api/my-links/extend/route.ts', 'app/api/my-links/transfer/route.ts', 'app/api/admin/links/bulk-delete/route.ts', 'app/api/admin/links/[id]/route.ts']) {
+    assert.match(await readFile(file, 'utf8'), /request\.json\(\)\.catch\(\(\) => null\)/, file);
+  }
+});
