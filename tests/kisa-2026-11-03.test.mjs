@@ -88,3 +88,13 @@ test('www.샘링크.kr 은 정식 주소로 넘긴다', async () => {
   assert.match(cfg, /value: "www\.xn--9y2br3k43n\.kr"/);
   assert.match(cfg, /destination: "https:\/\/xn--9y2br3k43n\.kr\/:path\*"/);
 });
+
+test('QR 이 안 뜨는 일 줄이기: 새로 그릴 때만 횟수 세기, 실패 시 저절로 다시, 인쇄 창은 그림을 직접 넣기', async () => {
+  assert.match(await readFile('app/api/qr/route.ts', 'utf8'), /if \(!png && !allowQr\(request\)\)/);
+  const img = await readFile('app/qr-image.tsx', 'utf8');
+  assert.match(img, /onError=\{\(\) => setFailed\(true\)\}/);
+  assert.match(await readFile('app/present/[slug]/present-client.tsx', 'utf8'), /<RetryingQrImage className="present-qr"/);
+  const page = await readFile('app/page.tsx', 'utf8');
+  assert.match(page, /<RetryingQrImage src=\{qrImageUrl\}/);
+  assert.match(page, /reader\.readAsDataURL\(blob\)/);
+});

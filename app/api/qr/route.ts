@@ -98,11 +98,6 @@ export async function GET(request: Request) {
     );
   }
 
-  // 잘못된 요청은 횟수에 넣지 않는다 — 올바른 QR 요청만 센다.
-  if (!allowQr(request)) {
-    return NextResponse.json({ error: "QR 코드를 너무 자주 만들었습니다. 잠시 후 다시 시도해 주세요." }, { status: 429, headers: { "Retry-After": "60" } });
-  }
-
   const size = sanitizeSize(url.searchParams.get("size"));
   // 기존 외부 API는 margin을 px로 받았으므로 모듈 단위(약 1/10)로 환산해 호환을 유지합니다.
   const marginPx = Math.min(Math.max(Number.parseInt(url.searchParams.get("margin") ?? "10", 10) || 10, 0), 40);
@@ -110,6 +105,10 @@ export async function GET(request: Request) {
 
   const cacheKey = `${size}|${margin}|${data}`;
   let png: Buffer | undefined = qrCache.get(cacheKey);
+  // 새로 그릴 때만 횟수를 센다(2026-11-03: 학교처럼 IP 하나를 여럿이 쓸 때, 이미 만든 그림을 다시 받는 것까지 막지 않게).
+  if (!png && !allowQr(request)) {
+    return NextResponse.json({ error: "QR 코드를 너무 자주 만들었습니다. 잠시 후 다시 시도해 주세요." }, { status: 429, headers: { "Retry-After": "60" } });
+  }
   try {
     png ??= await QRCode.toBuffer(data, {
       type: "png",

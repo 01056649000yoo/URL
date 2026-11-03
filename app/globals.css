@@ -2776,3 +2776,15 @@ body { height: auto; overflow: visible; }
   .panel-home .link-management-card { padding: 14px; }
   .home-left .quick-link-list .row-stage { flex: 1; }
 }
+
+/* QR 을 못 받아왔을 때 안내(2026-11-03) — 깨진 그림 대신, 저절로 다시 받는 중임을 알린다 */
+.qr-fallback {
+  display: grid; place-items: center; align-content: center; gap: 4px; width: 100%; aspect-ratio: 1 / 1;
+  padding: 12px; border: 2px dashed #c4cee3; border-radius: 12px; background: #f6f8fe;
+  color: var(--muted); text-align: center; word-break: keep-all;
+}
+.qr-fallback strong { color: var(--text); font-size: max(0.875rem, 2.6cqw); }
+.qr-fallback small { font-size: max(0.75rem, 2cqw); }
+.present-stage .qr-fallback { width: min(56vh, 82vw); }
+.present-stage .qr-fallback strong { font-size: clamp(1.1rem, 2.6vw, 1.6rem); }
+.present-stage .qr-fallback small { font-size: clamp(0.9rem, 1.8vw, 1.1rem); }

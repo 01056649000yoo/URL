@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { RetryingQrImage } from "../../qr-image";
 
 const BRAND_DOMAIN = "샘링크.kr";
 
@@ -176,7 +177,7 @@ export default function PresentClient({ slug }: { slug: string }) {
       </button>
 
       <section className="present-stage">
-        {qrSrc ? <img className="present-qr" src={qrSrc} alt={`${displayUrl} QR 코드`} /> : null}
+        {qrSrc ? <RetryingQrImage className="present-qr" src={qrSrc} alt={`${displayUrl} QR 코드`} /> : null}
         <p className="present-url">{displayUrl}</p>
         {canSeeStats ? (
           <>

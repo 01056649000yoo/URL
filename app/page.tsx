@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AccountBar } from "./account-bar";
+import { RetryingQrImage } from "./qr-image";
 import { planFolderSync, rebaseFolders, sanitizeFolders, type LinkFolder as SyncedFolder } from "@/lib/link-folders";
 
 type CreateResult = {
@@ -175,14 +176,33 @@ function escapeHtml(value: string) {
 }
 
 // 제목 + QR + 짧은 주소가 들어간 A4 인쇄용 창을 엽니다. 제목은 인쇄 전 클릭해서 바로 고칠 수 있습니다.
-function openQrPrintView(url: string, title: string, slug: string) {
+// 인쇄 창(빈 새 창에 글을 써 넣는 방식)은 새 창이 그림을 따로 받으러 가지 못하는 경우가 있어,
+// 여는 쪽에서 QR 그림을 먼저 받아 그림 자체(data:)를 넣는다(2026-11-03 QR 안 뜸 점검). 못 받으면 주소로 둔다.
+async function openQrPrintView(url: string, title: string, slug: string) {
   const printWindow = window.open("", "_blank", "width=820,height=1000");
   if (!printWindow) {
     alert("팝업이 차단되어 인쇄 창을 열 수 없습니다. 팝업 허용 후 다시 시도해 주세요.");
     return;
   }
+  printWindow.document.write('<p style="font-family:sans-serif;padding:24px">QR 코드를 준비하고 있어요…</p>');
 
-  const qrSrc = `${window.location.origin}/api/qr?size=1200&margin=20&data=${encodeURIComponent(url)}`;
+  let qrSrc = `${window.location.origin}/api/qr?size=1200&margin=20&data=${encodeURIComponent(url)}`;
+  try {
+    const response = await fetch(qrSrc);
+    if (response.ok) {
+      const blob = await response.blob();
+      qrSrc = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch {
+    // 못 받으면 주소 그대로 — 새 창이 직접 받아 본다.
+  }
+  if (printWindow.closed) return;
+  printWindow.document.open();
   const displayUrl = url.replace(/^https?:\/\//, "");
   const safeTitle = escapeHtml(title.trim() || "QR 코드를 스캔해 주세요");
 
@@ -2069,7 +2089,7 @@ export default function HomePage() {
                 </button>
               </div>
               <button className="stage-qr" type="button" onClick={() => setIsQrOpen(true)} aria-label="QR 코드 크게 보기">
-                <img src={qrImageUrl} alt="단축링크 QR 코드" />
+                <RetryingQrImage src={qrImageUrl} alt="단축링크 QR 코드" />
               </button>
               <div className="stage-actions">
                 <button className="qr-open" type="button" onClick={() => setIsQrOpen(true)}>크게 보기</button>
@@ -2333,7 +2353,7 @@ export default function HomePage() {
                 type="button"
                 onClick={() => {
                   const saved = savedLinks.find((link) => link.slug === result?.slug);
-                  openQrPrintView(resultUrl, saved?.label ?? "", result?.slug ?? "code");
+                  void openQrPrintView(resultUrl, saved?.label ?? "", result?.slug ?? "code");
                 }}
                 title="제목과 QR 코드, 짧은 주소가 함께 들어간 A4 인쇄용 화면을 엽니다."
               >
@@ -2500,7 +2520,7 @@ export default function HomePage() {
                   className="mini-button"
                   type="button"
                   onClick={() =>
-                    openQrPrintView(selectedSavedUrl, selectedSavedLink.label ?? "", selectedSavedLink.slug)
+                    void openQrPrintView(selectedSavedUrl, selectedSavedLink.label ?? "", selectedSavedLink.slug)
                   }
                   title="제목과 QR 코드, 짧은 주소가 함께 들어간 A4 인쇄용 화면을 엽니다."
                 >
