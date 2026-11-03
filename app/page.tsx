@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AccountBar } from "./account-bar";
+import { planFolderSync, rebaseFolders, sanitizeFolders, type LinkFolder as SyncedFolder } from "@/lib/link-folders";
 
 type CreateResult = {
   shortUrl: string;
@@ -61,6 +62,8 @@ const LAST_RESULT_KEY = "samlink-last-result";
 const RECENT_LINK_LIMIT = 3;
 const MY_LINKS_KEY = "samlink-my-links";
 const MAX_SAVED_LINKS = 30;
+const LINK_FOLDERS_OWNER_KEY = "samlink-link-folders-owner";
+const LINK_FOLDERS_BASE_KEY = "samlink-link-folders-base";
 const LINK_FOLDERS_KEY = "samlink-link-folders";
 // 목록을 접어 둔 상태는 모드(일반 링크·묶음)마다 따로 이 브라우저에 기억합니다. 접어 두면 다음에도 접힌 채로 열립니다.
 const LIST_COLLAPSED_KEY = "samlink-list-collapsed";
@@ -356,6 +359,20 @@ export default function HomePage() {
   const [extendNotice, setExtendNotice] = useState("");
   const [myLinks, setMyLinks] = useState<MyLink[]>([]);
   const [isLoadingMyLinks, setIsLoadingMyLinks] = useState(false);
+  // 서버 링크 목록을 한 번이라도 제대로 읽었는지 — 읽기 전에는 폴더 속 링크를 '없는 링크'로 보고 지우지 않는다.
+  const [myLinksLoaded, setMyLinksLoaded] = useState(false);
+  // 폴더 구성 계정 저장(2026-11-03): 계정 것을 먼저 읽어 합친 뒤에만 계정에 다시 쓴다.
+  const folderSyncReady = useRef(false);
+  // 마지막으로 계정과 맞춘 폴더(3방향 합치기의 기준). 브라우저에도 남겨 저장 실패·창 닫힘 뒤에도 다음에 합친다.
+  const syncedBase = useRef<SyncedFolder[]>([]);
+  const folderVersion = useRef(0);
+  const folderAccountKey = useRef("");
+  const folderSyncGen = useRef(0);
+  const folderSaveInFlight = useRef(false);
+  const folderSaveAgain = useRef(false);
+  const latestFolders = useRef<SyncedFolder[]>([]);
+  const [folderSyncTick, setFolderSyncTick] = useState(0);
+  const [folderPullTick, setFolderPullTick] = useState(0);
   const [linkFolders, setLinkFolders] = useState<LinkFolder[]>([]);
   const [newFolderName, setNewFolderName] = useState("");
   const [draggedSlug, setDraggedSlug] = useState<string | null>(null);
@@ -365,7 +382,8 @@ export default function HomePage() {
   const [listQuery, setListQuery] = useState("");
   const [listSort, setListSort] = useState<"new" | "exp" | "visits">("new");
   const [listView, setListView] = useState<"row" | "card">("row");
-  const [selectedFolderId, setSelectedFolderId] = useState("none");
+  // 미분류는 종류별로 둘: "none-single"(일반 링크)·"none-bundle"(링크 묶음). 만든 폴더는 그 폴더 id.
+  const [selectedFolderId, setSelectedFolderId] = useState("none-single");
   const [toastMessage, setToastMessage] = useState("");
   const [pendingDeleteSlug, setPendingDeleteSlug] = useState<string | null>(null);
   const [isDeletingLink, setIsDeletingLink] = useState(false);
@@ -752,11 +770,15 @@ export default function HomePage() {
     for (const slug of folder.slugs) folderBySlug.set(slug, folder.id);
   }
   const unfiledLinks = activeLinks.filter((link) => !folderBySlug.has(link.slug));
+  const unfiledSingleLinks = unfiledLinks.filter((link) => !link.isBundle);
+  const unfiledBundleLinks = unfiledLinks.filter((link) => link.isBundle);
   const currentFolder = linkFolders.find((folder) => folder.id === selectedFolderId) ?? null;
-  const currentFolderId = currentFolder ? currentFolder.id : "none";
+  const currentFolderId = currentFolder ? currentFolder.id : selectedFolderId === "none-bundle" ? "none-bundle" : "none-single";
   const currentFolderLinks = currentFolder
     ? activeLinks.filter((link) => currentFolder.slugs.includes(link.slug))
-    : unfiledLinks;
+    : currentFolderId === "none-bundle"
+      ? unfiledBundleLinks
+      : unfiledSingleLinks;
 
   useEffect(() => {
     setPendingDeleteSlug(null);
@@ -775,6 +797,7 @@ export default function HomePage() {
       }
 
       setMyLinks(data.links ?? []);
+      setMyLinksLoaded(true);
     } catch {
       // 내 링크 목록은 보조 정보라서 실패해도 링크 생성 흐름은 막지 않습니다.
     } finally {
@@ -821,7 +844,8 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!mergedLinks.length || !linkFolders.length) return;
+    // 계정 연결 중에는 서버가 볼 수 있는 링크만 남겨 저장하므로 여기서 지우지 않는다(목록을 덜 읽은 채 지우는 사고 방지).
+    if (isAccountConnected || !myLinksLoaded || !mergedLinks.length || !linkFolders.length) return;
     const availableSlugs = new Set(mergedLinks.map((link) => link.slug));
     const cleaned = linkFolders.map((folder) => ({
       ...folder,
@@ -831,7 +855,134 @@ export default function HomePage() {
       setLinkFolders(cleaned);
       writeLinkFolders(cleaned);
     }
-  }, [mergedLinks, linkFolders]);
+  }, [mergedLinks, linkFolders, myLinksLoaded, isAccountConnected]);
+
+  latestFolders.current = sanitizeFolders(linkFolders);
+
+  function rememberSynced(folders: SyncedFolder[], version: number) {
+    syncedBase.current = folders;
+    folderVersion.current = version;
+    try {
+      window.localStorage.setItem(LINK_FOLDERS_OWNER_KEY, folderAccountKey.current);
+      window.localStorage.setItem(LINK_FOLDERS_BASE_KEY, JSON.stringify(folders));
+    } catch {
+      // 저장이 막혀도 이번 화면에서는 계속 맞춘다.
+    }
+  }
+
+  // 계정에 연결되면 계정에 저장된 폴더 구성을 읽는다. 무엇을 기준으로 할지는 planFolderSync 규칙(lib/link-folders.ts).
+  useEffect(() => {
+    folderSyncReady.current = false;
+    folderSyncGen.current += 1;
+    const gen = folderSyncGen.current;
+    if (!isAccountConnected) return;
+    (async () => {
+      try {
+        const response = await fetch("/api/my-links/folders");
+        if (!response.ok || gen !== folderSyncGen.current) return;
+        const data = (await response.json()) as { folders?: unknown; version?: number; accountKey?: string };
+        if (gen !== folderSyncGen.current || typeof data.accountKey !== "string") return;
+        const accountFolders = sanitizeFolders(data.folders);
+        const accountVersion = typeof data.version === "number" ? data.version : 0;
+        let localOwner: string | null = null;
+        let localBase: SyncedFolder[] | null = null;
+        try {
+          localOwner = window.localStorage.getItem(LINK_FOLDERS_OWNER_KEY);
+          const rawBase = window.localStorage.getItem(LINK_FOLDERS_BASE_KEY);
+          localBase = rawBase ? sanitizeFolders(JSON.parse(rawBase)) : null;
+        } catch {
+          localOwner = null;
+          localBase = null;
+        }
+        const plan = planFolderSync({
+          accountFolders,
+          accountVersion,
+          accountKey: data.accountKey,
+          localFolders: readLinkFolders(),
+          localOwner,
+          localBase,
+        });
+        folderAccountKey.current = data.accountKey;
+        // 계정과 맞춘 기준은 지금 계정 상태. 이 브라우저 몫(plan.next 와의 차이)은 아래 저장이 올린다.
+        // 처음 연결한 브라우저는 올리기에 성공한 뒤에야 "맞춰 본 브라우저"로 기록한다(외부 검토 반영).
+        syncedBase.current = accountFolders;
+        folderVersion.current = accountVersion;
+        if (!plan.needsPush) rememberSynced(accountFolders, accountVersion);
+        setLinkFolders(plan.next);
+        writeLinkFolders(plan.next);
+        folderSyncReady.current = true;
+        setFolderSyncTick((tick) => tick + 1);
+      } catch {
+        // 못 읽으면 이 브라우저 폴더만 쓰고, 계정에는 쓰지 않는다.
+      }
+    })();
+  }, [isAccountConnected, folderPullTick]);
+
+  // 계정에 폴더 저장: 한 번에 하나씩. 다른 기기에서 먼저 바뀌었으면(409) 양쪽 변경을 합쳐 다시 보낸다.
+  async function flushFolders(attempt = 0) {
+    if (!folderSyncReady.current) return;
+    if (folderSaveInFlight.current) {
+      folderSaveAgain.current = true;
+      return;
+    }
+    const gen = folderSyncGen.current;
+    const snapshot = latestFolders.current;
+    if (JSON.stringify(snapshot) === JSON.stringify(syncedBase.current)) return;
+    folderSaveInFlight.current = true;
+    folderSaveAgain.current = false;
+    let retryLater = false;
+    try {
+      const response = await fetch("/api/my-links/folders", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folders: snapshot, baseVersion: folderVersion.current, accountKey: folderAccountKey.current }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { folders?: unknown; version?: number; accountChanged?: boolean }
+        | null;
+      if (gen !== folderSyncGen.current) return; // 그 사이 연결이 바뀜 — 옛 응답은 버린다.
+      if (response.ok && data && typeof data.version === "number") {
+        const saved = sanitizeFolders(data.folders);
+        rememberSynced(saved, data.version);
+        // 보낸 뒤 바꾼 게 없을 때만, 서버가 정리한 결과(지워진 링크 빼기)로 화면을 맞춘다.
+        if (JSON.stringify(latestFolders.current) === JSON.stringify(snapshot) && JSON.stringify(saved) !== JSON.stringify(snapshot)) {
+          setLinkFolders(saved);
+          writeLinkFolders(saved);
+        }
+      } else if (response.status === 409 && data?.accountChanged) {
+        setFolderPullTick((tick) => tick + 1);
+      } else if (response.status === 409 && data && typeof data.version === "number") {
+        const theirs = sanitizeFolders(data.folders);
+        const merged = rebaseFolders(syncedBase.current, latestFolders.current, theirs);
+        syncedBase.current = theirs;
+        folderVersion.current = data.version;
+        setLinkFolders(merged);
+        writeLinkFolders(merged);
+        latestFolders.current = merged;
+        if (attempt < 3) folderSaveAgain.current = true;
+        else setFolderNotice("다른 기기와 폴더를 맞추지 못했어요. 잠시 뒤 다시 열어 주세요.");
+      } else {
+        retryLater = true;
+      }
+    } catch {
+      retryLater = true;
+    } finally {
+      folderSaveInFlight.current = false;
+    }
+    if (gen !== folderSyncGen.current) return;
+    if (folderSaveAgain.current) void flushFolders(attempt + 1);
+    else if (retryLater) window.setTimeout(() => void flushFolders(attempt + 1), 5000);
+  }
+
+  // 폴더를 만들거나 옮기면 잠시 뒤 계정에도 저장한다.
+  useEffect(() => {
+    if (!isAccountConnected || !folderSyncReady.current) return;
+    if (JSON.stringify(sanitizeFolders(linkFolders)) === JSON.stringify(syncedBase.current)) return;
+    const timer = window.setTimeout(() => void flushFolders(), 400);
+    return () => window.clearTimeout(timer);
+    // flushFolders 는 ref 만 쓰므로 의존성에서 뺀다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkFolders, isAccountConnected, folderSyncTick]);
 
   const qrImageUrl = useMemo(() => {
     if (!resultUrl) return "";
@@ -1446,7 +1597,12 @@ export default function HomePage() {
     setLinkFolders(nextFolders);
     writeLinkFolders(nextFolders);
     setDraggedSlug(null);
-    setFolderNotice(destination ? `‘${destination.name}’ 폴더로 이동했습니다.` : "미분류로 이동했습니다.");
+    const moved = activeLinks.find((link) => link.slug === slug);
+    setFolderNotice(
+      destination
+        ? `‘${destination.name}’ 폴더로 이동했습니다.`
+        : `${moved?.isBundle ? "링크 묶음" : "일반 링크"} 미분류로 이동했습니다.`,
+    );
   }
 
   function renameLinkFolder(folder: LinkFolder) {
@@ -1565,7 +1721,7 @@ export default function HomePage() {
             }}
           >
             <option value="">폴더 이동</option>
-            <option value="none">🗂️ 미분류</option>
+            <option value="none">{link.isBundle ? "🗂️ 링크 묶음 미분류" : "🔗 일반 링크 미분류"}</option>
             {linkFolders.map((folder) => (
               <option key={folder.id} value={folder.id}>📁 {folder.name}</option>
             ))}
@@ -1864,7 +2020,14 @@ export default function HomePage() {
               </p>
             )}
             {!collapsedLists[createMode] && !listQueryText && shownModeLinks.length > RECENT_LINK_LIMIT ? (
-              <button className="list-more" type="button" onClick={() => setCreateMode("manage")}>
+              <button
+                className="list-more"
+                type="button"
+                onClick={() => {
+                  setSelectedFolderId(createMode === "bundle" ? "none-bundle" : "none-single");
+                  setCreateMode("manage");
+                }}
+              >
                 {listSort === "new" ? "최근" : "앞의"} {RECENT_LINK_LIMIT}개만 보여요 · 검색하면 전체에서 찾아요 · 전체 {shownModeLinks.length}개는 링크 관리에서 →
               </button>
             ) : null}
@@ -1962,7 +2125,8 @@ export default function HomePage() {
                 </form>
                 <div className="manage-folder-list" role="listbox" aria-label="폴더 목록">
                   {[
-                    { id: "none", name: "미분류", icon: "🗂️", count: unfiledLinks.length },
+                    { id: "none-single", name: "일반 링크 미분류", icon: "🔗", count: unfiledSingleLinks.length },
+                    { id: "none-bundle", name: "링크 묶음 미분류", icon: "🗂️", count: unfiledBundleLinks.length },
                     ...linkFolders.map((folder) => ({
                       id: folder.id,
                       name: folder.name,
@@ -1984,7 +2148,7 @@ export default function HomePage() {
                       onDrop={(event) => {
                         event.preventDefault();
                         const slug = event.dataTransfer.getData("text/plain") || draggedSlug;
-                        if (slug) moveLinkToFolder(slug, item.id === "none" ? null : item.id);
+                        if (slug) moveLinkToFolder(slug, item.id.startsWith("none-") ? null : item.id);
                       }}
                     >
                       <span className="manage-folder-icon" aria-hidden="true">{item.icon}</span>
@@ -1993,12 +2157,12 @@ export default function HomePage() {
                     </button>
                   ))}
                 </div>
-                <p className="manage-tip">링크 줄의 ⋮⋮를 잡아 폴더로 끌어다 놓거나, 줄의 ‘폴더 이동’ 상자를 쓰세요. 폴더 구성은 현재 브라우저에 저장돼요.</p>
+                <p className="manage-tip">링크 줄의 ⋮⋮를 잡아 폴더로 끌어다 놓거나, 줄의 ‘폴더 이동’ 상자를 쓰세요. {isAccountConnected ? "폴더 구성은 아지트 계정에 저장돼 다른 기기에서도 같아요." : "폴더 구성은 지금 이 브라우저에만 저장돼요. 아지트 계정에 연결하면 다른 기기에서도 같아요."}</p>
               </div>
 
               <div className="manage-links">
                 <div className="manage-links-head">
-                  <strong>{currentFolder ? `📁 ${currentFolder.name}` : "🗂️ 미분류"}</strong>
+                  <strong>{currentFolder ? `📁 ${currentFolder.name}` : currentFolderId === "none-bundle" ? "🗂️ 링크 묶음 미분류" : "🔗 일반 링크 미분류"}</strong>
                   <span className="list-count">{currentFolderLinks.length}개</span>
                   {currentFolder ? (
                     <div className="link-folder-actions">
@@ -2010,7 +2174,11 @@ export default function HomePage() {
                 <div className="saved-links-list manage-links-list">
                   {currentFolderLinks.length ? currentFolderLinks.map((link) => renderManagedLink(link, true, true)) : (
                     <p className="link-folder-empty">
-                      {currentFolder ? "이 폴더에는 링크가 없어요. 다른 폴더의 링크를 끌어다 놓아 보세요." : "정리되지 않은 링크가 없습니다."}
+                      {currentFolder
+                        ? "이 폴더에는 링크가 없어요. 다른 폴더의 링크를 끌어다 놓아 보세요."
+                        : currentFolderId === "none-bundle"
+                          ? "정리되지 않은 링크 묶음이 없습니다."
+                          : "정리되지 않은 일반 링크가 없습니다."}
                     </p>
                   )}
                 </div>
