@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AccountBar } from "./account-bar";
 
 type CreateResult = {
@@ -58,6 +58,7 @@ type MyLinksResult = {
 type RetentionPeriod = "day" | "week" | "month" | "quarter";
 
 const LAST_RESULT_KEY = "samlink-last-result";
+const RECENT_LINK_LIMIT = 5;
 const MY_LINKS_KEY = "samlink-my-links";
 const MAX_SAVED_LINKS = 30;
 const LINK_FOLDERS_KEY = "samlink-link-folders";
@@ -338,6 +339,10 @@ export default function HomePage() {
   const [qrScale, setQrScale] = useState<1 | 1.5>(1);
   const [savedLinks, setSavedLinks] = useState<SavedLink[]>([]);
   const [selectedSavedSlug, setSelectedSavedSlug] = useState<string | null>(null);
+  const [stageSource, setStageSource] = useState<"new" | "list">("new");
+  const [stageAnnouncement, setStageAnnouncement] = useState("");
+  const [stageRevealTick, setStageRevealTick] = useState(0);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const [linkStats, setLinkStats] = useState({
     clickCount: 0,
     recentVisitors: 0,
@@ -1108,6 +1113,9 @@ export default function HomePage() {
       }
 
       setResult(data);
+      setStageSource("new");
+      setStageAnnouncement(`새 짧은 주소가 만들어졌어요: ${data.displayShortUrl ?? data.shortUrl}`);
+      setStageRevealTick((tick) => tick + 1);
       setLinkStats({
         clickCount: 0,
         recentVisitors: 0,
@@ -1175,6 +1183,44 @@ export default function HomePage() {
     setLabelDraft("");
     setExtendNotice("");
   }
+
+  // 목록의 링크를 오른쪽 결과 칸(수업 화면에 띄우는 칸)에 크게 보여 줍니다.
+  function showOnStage(link: MergedLink) {
+    const stats = savedLinkStats[link.slug];
+    const next: CreateResult = {
+      shortUrl: link.shortUrl,
+      displayShortUrl: link.displayShortUrl,
+      slug: link.slug,
+      destination: link.destination,
+      expiresAt: stats?.expiresAt ?? link.expiresAt ?? undefined,
+      isBundle: link.isBundle,
+    };
+    setResult(next);
+    setStageSource("list");
+    setCopyLabel("복사");
+    setLinkStats({
+      clickCount: stats?.clickCount ?? 0,
+      recentVisitors: stats?.recentVisitors ?? 0,
+      todayVisitors: stats?.todayVisitors ?? 0,
+    });
+    try {
+      window.localStorage.setItem(LAST_RESULT_KEY, JSON.stringify(next));
+    } catch {
+      // 저장이 막혀도 화면에는 보입니다.
+    }
+    setStageAnnouncement(`${link.displayShortUrl ?? link.shortUrl} 링크를 결과 칸에 띄웠어요`);
+    setStageRevealTick((tick) => tick + 1);
+  }
+
+  // 좁은 화면에서는 결과 칸이 폼 아래에 있으므로, 새 결과가 나오면 그 칸으로 스크롤합니다.
+  useEffect(() => {
+    if (!stageRevealTick) return;
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+    const frame = window.requestAnimationFrame(() => {
+      stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [stageRevealTick]);
 
   // 서버에만 기록된 링크(브라우저 저장 이전 생성분 등)는 클릭 시 보관함에 넣어 동일하게 관리합니다.
   function openMergedLink(link: MergedLink) {
@@ -1420,7 +1466,7 @@ export default function HomePage() {
     setFolderNotice("폴더를 삭제하고 링크를 미분류로 이동했습니다.");
   }
 
-  function renderManagedLink(link: MergedLink, allowDrag = true, showMove = false) {
+  function renderManagedLink(link: MergedLink, allowDrag = true, showMove = false, showStage = false) {
     const linkUrl = link.displayShortUrl ?? link.shortUrl;
     const statsForLink = savedLinkStats[link.slug];
     const effectiveExpiresAt = statsForLink?.expiresAt ?? link.expiresAt;
@@ -1432,7 +1478,7 @@ export default function HomePage() {
 
     return (
       <div
-        className={`saved-link-row${draggedSlug === link.slug ? " is-dragging" : ""}${isDisabled ? " is-disabled" : ""}`}
+        className={`saved-link-row${draggedSlug === link.slug ? " is-dragging" : ""}${isDisabled ? " is-disabled" : ""}${showStage && result?.slug === link.slug ? " is-on-stage" : ""}`}
         key={link.slug}
         draggable={canDrag}
         onDragStart={canDrag ? (event) => {
@@ -1472,6 +1518,34 @@ export default function HomePage() {
             <span className="saved-link-recent">최근 5분 {statsForLink?.recentVisitors ?? 0}</span>
           </div>
         </button>
+        {link.isBundle && !isDisabled ? (
+          <button
+            className="saved-bundle-qr"
+            type="button"
+            onClick={() => {
+              openMergedLink(link);
+              setIsSavedQrOpen(true);
+            }}
+            aria-label={`${link.label || linkUrl} QR 코드 크게 보기`}
+          >
+            <img
+              src={`/api/qr?size=160&margin=4&data=${encodeURIComponent(linkUrl)}`}
+              alt=""
+              loading="lazy"
+            />
+          </button>
+        ) : null}
+        {showStage && !isDisabled && !linkExpired ? (
+          <button
+            className="row-stage"
+            type="button"
+            onClick={() => showOnStage(link)}
+            aria-pressed={result?.slug === link.slug}
+            aria-label={`${link.label || linkUrl} 주소와 QR을 결과 칸에 크게 띄우기`}
+          >
+            <span aria-hidden="true">📺</span> 띄우기
+          </button>
+        ) : null}
         {!isDisabled ? (
           <button className="row-copy" type="button" onClick={() => void copyLinkUrl(link)} aria-label={`${linkUrl} 복사`}>
             복사
@@ -1506,7 +1580,7 @@ export default function HomePage() {
 
   return (
     <main className={isEmbedded ? "shell shell-home is-embedded" : "shell shell-home"}>
-      <section className="panel panel-home">
+      <section className={createMode === "bundle" ? "panel panel-home is-bundle-mode" : "panel panel-home"}>
         <div className="panel-decoration panel-decoration-left" aria-hidden="true" />
         <div className="panel-decoration panel-decoration-right" aria-hidden="true" />
 
@@ -1526,12 +1600,8 @@ export default function HomePage() {
             <div className="feature-brief-list">
               <span className="feature-brief-pill">단축 링크·QR 즉시 생성</span>
               <span className="feature-brief-pill">여러 링크를 주소 하나로</span>
-              <span className="feature-brief-pill">브라우저 기반 링크 보관</span>
-              <span className="feature-brief-pill">링크별 방문 통계 확인</span>
-              <span className="feature-brief-pill">QR 코드 PiP 모드 지원</span>
-              <span className="feature-brief-pill">폴더별 링크 정리</span>
-              <span className="feature-brief-pill">다른 기기로 링크 복사</span>
-              <span className="feature-brief-pill">한글 주소 이름 지원</span>
+              <span className="feature-brief-pill">링크별 방문 통계</span>
+              <span className="feature-brief-pill">한글 주소 이름</span>
             </div>
           </aside>
         </section>
@@ -1554,9 +1624,9 @@ export default function HomePage() {
           <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} onStatus={setIsAccountConnected} />
         </div>
 
-        <div className="col-make">
-
         {createMode !== "manage" ? (
+        <div className="home-work">
+        <div className="home-left">
         <form className="stack create-form" onSubmit={handleSubmit}>
           <div className="form-intro">
             <span className="form-step">01</span>
@@ -1719,91 +1789,7 @@ export default function HomePage() {
             </button>
           ) : null}
         </form>
-        ) : null}
-
-        {result && (createMode === "single" || (createMode === "bundle" && result.isBundle)) ? (
-          <section className="result-card" aria-live="polite">
-            <div className="result-card-heading">
-              <div>
-                <span className="section-kicker">완료</span>
-                <strong>새 단축링크가 준비됐어요</strong>
-              </div>
-              <span className="result-card-status">사용 가능</span>
-            </div>
-            <div className="result-stack">
-              <div className="result-row">
-                <a className="result-link" href={result.shortUrl} target="_blank" rel="noreferrer">
-                  {resultUrl}
-                </a>
-                <button
-                  className="copy-button"
-                  type="button"
-                  onClick={handleCopy}
-                  aria-label="단축링크 복사"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M9 9a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z" />
-                    <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
-                  </svg>
-                  <span>{copyLabel}</span>
-                </button>
-              </div>
-
-              <div className="qr-panel">
-                <div className="qr-panel-copy">
-                  <span className="qr-launch-label">QR 코드</span>
-                  <span className="qr-launch-hint">수업 자료에 붙이거나 화면에 띄워 보여 주세요</span>
-                  {result.expiresAt ? (
-                    <span className="qr-panel-expiry">만료 예정 {formatDateTime(result.expiresAt)}</span>
-                  ) : null}
-                  <div className="qr-actions">
-                    <button className="qr-open" type="button" onClick={() => setIsQrOpen(true)}>크게 보기</button>
-                    <a className="qr-save" href={qrDownloadUrl} download={`samlink-qr-${result.slug ?? "code"}.png`}>이미지 저장</a>
-                  </div>
-                </div>
-                <button className="qr-thumb-button" type="button" onClick={() => setIsQrOpen(true)} aria-label="QR 코드 크게 보기">
-                  <img className="qr-thumb" src={qrImageUrl} alt="단축링크 QR 코드" />
-                </button>
-              </div>
-
-              {result.expiresAt ? (
-                <p className="result-meta">만료 예정: {formatDateTime(result.expiresAt)}</p>
-              ) : null}
-
-              <div className="public-footer-banner" aria-label="방금 만든 링크 통계">
-                <div className="banner-card">
-                  <span className="banner-label">총 클릭 수</span>
-                  <strong>{linkStats.clickCount}</strong>
-                  <span className="banner-subtext">누적 기준</span>
-                </div>
-                <div className="banner-card">
-                  <span className="banner-label">최근 5분 접속</span>
-                  <strong>{linkStats.recentVisitors}</strong>
-                  <span className="banner-subtext">유니크 방문자 기준</span>
-                </div>
-                <div className="banner-card">
-                  <span className="banner-label">오늘 방문자 수</span>
-                  <strong>{linkStats.todayVisitors}</strong>
-                  <span className="banner-subtext">유니크 방문자 기준</span>
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {createMode !== "manage" && !(result && (createMode === "single" || (createMode === "bundle" && result.isBundle))) ? (
-          <div className="result-placeholder" aria-hidden="true">
-            <span>{createMode === "bundle" ? "🗂️" : "🔗"}</span>
-            <strong>{createMode === "bundle" ? "만들면 묶음 주소와 QR이 나타나요" : "만들면 여기에 QR이 나타나요"}</strong>
-            <small>짧은 주소를 복사하거나 QR을 저장할 수 있어요.</small>
-          </div>
-        ) : null}
-
-        {error && createMode !== "manage" ? <p className="error">{error}</p> : null}
-
-        </div>
-
-        {createMode !== "manage" ? (
+        {error ? <p className="error">{error}</p> : null}
           <section className={`result-card quick-link-list${collapsedLists[createMode] ? " is-collapsed" : ""}`} aria-label={createMode === "bundle" ? "내 링크 묶음" : "내가 만든 링크"}>
             <div className="result-head">
               <strong>
@@ -1830,7 +1816,7 @@ export default function HomePage() {
                   : (isAccountConnected ? "아지트 계정에 저장된 일반 링크를 보여줍니다." : "이 브라우저에서 만든 일반 링크만 보여줍니다.")}
               </span>
             </div>
-            {!collapsedLists[createMode] && creationModeLinks.length >= 4 ? (
+            {!collapsedLists[createMode] && creationModeLinks.length > RECENT_LINK_LIMIT ? (
               <div className="list-toolbar">
                 <input
                   className="list-search"
@@ -1861,7 +1847,7 @@ export default function HomePage() {
             {collapsedLists[createMode] ? null : creationModeLinks.length ? (
               shownModeLinks.length ? (
                 <div className={`saved-links-list${listView === "card" ? " is-cards" : ""}`}>
-                  {shownModeLinks.map((link) => renderManagedLink(link, false))}
+                  {(listQueryText ? shownModeLinks : shownModeLinks.slice(0, RECENT_LINK_LIMIT)).map((link) => renderManagedLink(link, false, false, true))}
                 </div>
               ) : (
                 <p className="empty-result">‘{listQuery.trim()}’에 맞는 링크가 없어요.</p>
@@ -1875,6 +1861,11 @@ export default function HomePage() {
                   : "아직 만든 링크가 없습니다. 위에서 단축링크를 만들면 여기에 보입니다."}
               </p>
             )}
+            {!collapsedLists[createMode] && !listQueryText && shownModeLinks.length > RECENT_LINK_LIMIT ? (
+              <button className="list-more" type="button" onClick={() => setCreateMode("manage")}>
+                {listSort === "new" ? "최근" : "앞의"} {RECENT_LINK_LIMIT}개만 보여요 · 검색하면 전체에서 찾아요 · 전체 {shownModeLinks.length}개는 링크 관리에서 →
+              </button>
+            ) : null}
             {!collapsedLists[createMode] && stoppedModeLinks.length ? (
               <details className="stopped-links">
                 <summary>멈춘 링크 {stoppedModeLinks.length}개 (안전 검사로 사용이 중지됨)</summary>
@@ -1884,6 +1875,65 @@ export default function HomePage() {
               </details>
             ) : null}
           </section>
+        </div>
+
+        <div className="home-stage" ref={stageRef}>
+          <p className="stage-sr-status" role="status" aria-live="polite">{stageAnnouncement}</p>
+          {result && (createMode === "single" || (createMode === "bundle" && result.isBundle)) ? (
+            <section className="stage-card" aria-label="결과: 짧은 주소와 QR">
+              <div className="stage-head">
+                <span className="stage-kicker">
+                  {stageSource === "list"
+                    ? "📺 내 링크를 띄웠어요"
+                    : `✓ ${result.isBundle ? "링크 묶음이" : "단축링크가"} 준비됐어요`}
+                </span>
+                {result.expiresAt ? (
+                  <span className="stage-expiry">{formatDateTime(result.expiresAt)}까지</span>
+                ) : null}
+              </div>
+              <div className="stage-link-row">
+                <a className="stage-link" href={result.shortUrl} target="_blank" rel="noreferrer">
+                  {resultUrl}
+                </a>
+                <button className="stage-copy" type="button" onClick={handleCopy} aria-label="단축링크 복사">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 9a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z" />
+                    <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  <span>{copyLabel}</span>
+                </button>
+              </div>
+              <button className="stage-qr" type="button" onClick={() => setIsQrOpen(true)} aria-label="QR 코드 크게 보기">
+                <img src={qrImageUrl} alt="단축링크 QR 코드" />
+              </button>
+              <div className="stage-actions">
+                <button className="qr-open" type="button" onClick={() => setIsQrOpen(true)}>크게 보기</button>
+                <a className="qr-save" href={qrDownloadUrl} download={`samlink-qr-${result.slug ?? "code"}.png`}>이미지 저장</a>
+              </div>
+              <div className="stage-stats" aria-label="방금 만든 링크 통계">
+                <span>총 클릭 <strong>{linkStats.clickCount}</strong></span>
+                <span>최근 5분 <strong>{linkStats.recentVisitors}</strong></span>
+                <span>오늘 방문 <strong>{linkStats.todayVisitors}</strong></span>
+              </div>
+            </section>
+          ) : (
+            <div className="stage-card is-empty">
+              <div className="stage-head">
+                <span className="stage-kicker">결과</span>
+              </div>
+              <div className="stage-link-row">
+                <span className="stage-link is-placeholder">{BRAND_DOMAIN}/…</span>
+              </div>
+              <div className="stage-qr is-placeholder" aria-hidden="true">
+                <span>{createMode === "bundle" ? "🗂️" : "🔗"}</span>
+              </div>
+              <p className="stage-empty-text">
+                {createMode === "bundle" ? "묶음을 만들면 여기에 짧은 주소와 QR이 크게 나타나요" : "링크를 만들면 여기에 짧은 주소와 QR이 크게 나타나요"}
+              </p>
+            </div>
+          )}
+        </div>
+        </div>
         ) : null}
 
         {createMode === "manage" ? (
