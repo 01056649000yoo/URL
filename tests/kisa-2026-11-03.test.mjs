@@ -77,3 +77,14 @@ test('형식이 틀린 요청은 500 이 아니라 400(배포 점검에서 발�
     assert.match(await readFile(file, 'utf8'), /request\.json\(\)\.catch\(\(\) => null\)/, file);
   }
 });
+
+test('www 로 연 발표 화면도 QR 이 나온다(QR 서버는 www 를 같은 사이트로, 발표 화면은 정식 주소로)', async () => {
+  assert.match(await readFile('app/api/qr/route.ts', 'utf8'), /replace\(\/\^www\\\.\/i, ""\)/);
+  assert.match(await readFile('app/present/[slug]/present-client.tsx', 'utf8'), /url\.hostname = url\.hostname\.replace\(\/\^www\\\.\/i, ""\)/);
+});
+
+test('www.샘링크.kr 은 정식 주소로 넘긴다', async () => {
+  const cfg = await readFile('next.config.ts', 'utf8');
+  assert.match(cfg, /value: "www\.xn--9y2br3k43n\.kr"/);
+  assert.match(cfg, /destination: "https:\/\/xn--9y2br3k43n\.kr\/:path\*"/);
+});

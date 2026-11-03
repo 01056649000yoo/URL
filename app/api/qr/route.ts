@@ -51,8 +51,10 @@ function isOwnShortUrl(data: string, request: Request) {
     return false;
   }
 
-  const targetHost = domainToUnicode(target.hostname) || target.hostname;
-  return allowedHosts.has(targetHost);
+  // www.샘링크.kr 도 같은 사이트다(2026-11-03: www 로 연 발표 화면의 QR 이 400 으로 깨지던 문제).
+  const bare = (host: string) => host.replace(/^www\./i, "");
+  const targetHost = bare(domainToUnicode(target.hostname) || target.hostname);
+  return [...allowedHosts].some((host) => bare(host) === targetHost);
 }
 
 // 2026-11-03 KISA 점검(자동화 공격): QR 그림은 CPU 를 쓰므로 접속 주소(IP)별 1분 240장까지,

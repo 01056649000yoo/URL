@@ -72,9 +72,12 @@ export default function PresentClient({ slug }: { slug: string }) {
     return () => document.removeEventListener("fullscreenchange", handleChange);
   }, []);
 
+  // QR 에는 늘 정식 주소(www 없는)를 넣는다 — www 로 열어도 학생이 찍는 주소가 같게(2026-11-03).
   const shortUrl = useMemo(() => {
     if (!origin) return "";
-    return `${origin}/${encodeURIComponent(slug)}`;
+    const url = new URL(origin);
+    url.hostname = url.hostname.replace(/^www\./i, "");
+    return `${url.origin}/${encodeURIComponent(slug)}`;
   }, [origin, slug]);
 
   const displayUrl = useMemo(() => {
