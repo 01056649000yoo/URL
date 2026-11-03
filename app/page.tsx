@@ -58,7 +58,7 @@ type MyLinksResult = {
 type RetentionPeriod = "day" | "week" | "month" | "quarter";
 
 const LAST_RESULT_KEY = "samlink-last-result";
-const RECENT_LINK_LIMIT = 5;
+const RECENT_LINK_LIMIT = 3;
 const MY_LINKS_KEY = "samlink-my-links";
 const MAX_SAVED_LINKS = 30;
 const LINK_FOLDERS_KEY = "samlink-link-folders";
@@ -840,7 +840,8 @@ export default function HomePage() {
 
   const qrModalImageUrl = useMemo(() => {
     if (!resultUrl) return "";
-    const size = qrScale === 1.5 ? 540 : 360;
+    // 화면 표시 크기(480·720px)보다 넉넉하게 받아 큰 화면에서도 선명하게
+    const size = qrScale === 1.5 ? 1080 : 720;
     return `/api/qr?size=${size}&margin=10&data=${encodeURIComponent(resultUrl)}`;
   }, [qrScale, resultUrl]);
 
@@ -851,7 +852,8 @@ export default function HomePage() {
 
   const selectedSavedQrImageUrl = useMemo(() => {
     if (!selectedSavedUrl) return "";
-    const size = qrScale === 1.5 ? 540 : 360;
+    // 화면 표시 크기(480·720px)보다 넉넉하게 받아 큰 화면에서도 선명하게
+    const size = qrScale === 1.5 ? 1080 : 720;
     return `/api/qr?size=${size}&margin=10&data=${encodeURIComponent(selectedSavedUrl)}`;
   }, [qrScale, selectedSavedUrl]);
 
