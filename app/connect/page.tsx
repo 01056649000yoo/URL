@@ -21,8 +21,9 @@ export default function ConnectPage() {
     }
     connectWithTicket(ticket, state)
       .then((result) => {
-        setMessage(`아지트 ${result.displayName ?? "선생님"} 계정에 연결했습니다.${result.moved ? ` 이 브라우저의 링크 ${result.moved}개를 계정에 담았어요.` : ""}`);
-        setTimeout(() => window.location.replace("/"), 1800);
+        // 몇 개가 옮겨졌는지 늘 알린다 — 0개인데 동기화된 줄 아는 일이 없게(2026-11-04).
+        setMessage(`아지트 ${result.displayName ?? "선생님"} 계정에 연결했습니다. ${result.moved ? `이 브라우저의 링크 ${result.moved}개를 계정에 담았어요.` : "이 브라우저에는 계정에 담을 링크가 없었어요. 다른 브라우저에서 만든 링크는 그 브라우저에서 연결해야 담겨요."}`);
+        setTimeout(() => window.location.replace("/"), result.moved ? 2500 : 6000);
       })
       .catch((error: Error) => setMessage(error.message))
       .finally(() => setDone(true));

@@ -295,11 +295,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 아지트 계정에 연결돼 있으면 계정 목록에도 넣는다(다른 기기에서도 보이게, 2026-10-05). 계정은 저장 전에 읽어 둔다.
+    let accountSaveFailed = false;
     if (account) {
       try {
         await grantAccountAccess(admin, account.userId, [{ id: data.id, isOwner: true }]);
       } catch {
-        // 계정 목록에 못 넣어도 링크 만들기는 성공으로 둔다(이 기기 목록에는 있다).
+        // 계정 목록에 못 넣어도 링크 만들기는 성공으로 둔다(이 기기 목록에는 있다). 화면에는 사실대로 알린다(2026-11-04).
+        accountSaveFailed = true;
       }
     }
 
@@ -307,6 +309,7 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({
       slug: data.slug,
+      accountSaveFailed,
       destination: data.destination,
       shortUrl,
       displayShortUrl: toDisplayUrl(shortUrl),

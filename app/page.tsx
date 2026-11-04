@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AccountBar } from "./account-bar";
+import { AccountBar, startAccountConnect } from "./account-bar";
 import { RetryingQrImage } from "./qr-image";
 import { planFolderSync, rebaseFolders, sanitizeFolders, type LinkFolder as SyncedFolder } from "@/lib/link-folders";
 
@@ -14,6 +14,8 @@ type CreateResult = {
   expiresAt?: string;
   retentionPeriod?: string;
   isBundle?: boolean;
+  /** 연결된 채 만들었는데 계정에 못 넣음(이번 화면에서만 안내, 저장하지 않음) */
+  accountSaveFailed?: boolean;
 };
 
 type ErrorResult = {
@@ -60,6 +62,8 @@ type MyLinksResult = {
 type RetentionPeriod = "day" | "week" | "month" | "quarter";
 
 const LAST_RESULT_KEY = "samlink-last-result";
+// 연결 안 된 브라우저에서 '이 브라우저에만'을 고른 적이 있으면 다시 묻지 않는다(결과 칸 안내는 계속 보인다).
+const LOCAL_ONLY_KEY = "samlink-local-only-ok";
 const RECENT_LINK_LIMIT = 3;
 const MY_LINKS_KEY = "samlink-my-links";
 const MAX_SAVED_LINKS = 30;
@@ -353,6 +357,14 @@ function writeHiddenSlugs(slugs: string[]) {
 export default function HomePage() {
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [isAccountConnected, setIsAccountConnected] = useState(false);
+  const [accountKnown, setAccountKnown] = useState(false);
+  // 저장 위치 묻기(2026-11-04): 계정에 저장된 줄 알았는데 브라우저에만 있던 일을 막는다.
+  const [isStoragePromptOpen, setIsStoragePromptOpen] = useState(false);
+  const pendingForm = useRef<HTMLFormElement | null>(null);
+  const isSubmitGateBusy = useRef(false);
+  const storagePromptRef = useRef<HTMLDivElement | null>(null);
+  // 이 브라우저(기기)로는 서버가 찾을 수 없다고 답한 링크. 목록에서 지우지 않고 표시만 한다.
+  const [unavailableSlugs, setUnavailableSlugs] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
   const [error, setError] = useState("");
@@ -1195,9 +1207,11 @@ export default function HomePage() {
         }
       }
       setSavedLinkStats(nextStats);
+      // 서버의 404 는 '지워짐'과 '이 기기로는 볼 수 없음'을 일부러 구분하지 않는다. 기기 인식만 끊겨도 목록이 사라지지 않게
+      // 지우지 않고 표시만 하고, 선생님이 직접 뺄 수 있게 둔다(2026-11-04).
+      setUnavailableSlugs([...deletedSlugs]);
 
       const filteredLinks = savedLinks.filter((link) => {
-        if (deletedSlugs.has(link.slug)) return false;
         const statsForLink = nextStats[link.slug];
         if (statsForLink && statsForLink.isActive === false) return false;
         if (isPastGrace(statsForLink?.expiresAt ?? link.expiresAt)) return false;
@@ -1236,8 +1250,105 @@ export default function HomePage() {
     };
   }, [savedLinks]);
 
+  async function shouldAskStorage() {
+    if (isEmbedded) return false;
+    let connected = isAccountConnected;
+    if (!accountKnown) {
+      try {
+        const data = (await (await fetch("/api/account")).json()) as { connected?: boolean };
+        connected = Boolean(data.connected);
+      } catch {
+        connected = false;
+      }
+    }
+    if (connected) return false;
+    try {
+      return window.localStorage.getItem(LOCAL_ONLY_KEY) !== "1";
+    } catch {
+      return true;
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
+    // 연결 상태를 묻는 동안 또 눌러도, 만들기가 두 번 되거나 창이 겹치지 않게 한 번만 받는다.
+    if (isSubmitGateBusy.current || isSubmitting || isStoragePromptOpen) return;
+    isSubmitGateBusy.current = true;
+    try {
+      if (await shouldAskStorage()) {
+        pendingForm.current = form;
+        setIsStoragePromptOpen(true);
+        return;
+      }
+      await createLink(form);
+    } finally {
+      isSubmitGateBusy.current = false;
+    }
+  }
+
+  function closeStoragePrompt() {
+    setIsStoragePromptOpen(false);
+    pendingForm.current = null;
+  }
+
+  // 묻는 창: Esc 로 닫기, Tab 은 창 안에서만 돌기, 닫으면 만들기 버튼으로 돌아가기.
+  useEffect(() => {
+    if (!isStoragePromptOpen) return;
+    const submitButton = pendingForm.current?.querySelector<HTMLButtonElement>(".submit") ?? null;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeStoragePrompt();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const buttons = Array.from(storagePromptRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      if (!buttons.length) return;
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !storagePromptRef.current?.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !storagePromptRef.current?.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      submitButton?.focus();
+    };
+  }, [isStoragePromptOpen]);
+
+  // 저장 위치 고르기. '계정'은 링크를 만든 뒤 연결로 넘어간다 — 연결하면 이 브라우저의 링크가 계정으로 옮겨지므로 방금 만든 것도 담긴다.
+  async function chooseStorage(choice: "account" | "local") {
+    const form = pendingForm.current;
+    setIsStoragePromptOpen(false);
+    pendingForm.current = null;
+    if (!form) return;
+    if (choice === "local") {
+      try {
+        window.localStorage.setItem(LOCAL_ONLY_KEY, "1");
+      } catch {
+        // 저장이 막혀도 만들기는 그대로 한다.
+      }
+      await createLink(form);
+      return;
+    }
+    if ((await createLink(form)) && !(await startAccountConnect())) {
+      setError("링크는 만들었지만 계정 연결을 시작하지 못했어요. 결과 칸의 '계정에 저장하기'를 눌러 주세요.");
+    }
+  }
+
+  async function connectFromStage() {
+    setError("");
+    if (!(await startAccountConnect())) setError("계정 연결을 시작하지 못했어요. 잠시 뒤 다시 눌러 주세요.");
+  }
+
+  async function createLink(form: HTMLFormElement) {
+    let created = false;
     setIsSubmitting(true);
     setError("");
     setResult(null);
@@ -1246,7 +1357,6 @@ export default function HomePage() {
     setIsSavedQrOpen(false);
     setQrScale(1);
 
-    const form = event.currentTarget;
     const formData = new FormData(form);
     const payload: Record<string, unknown> = {
       retentionPeriod: String(formData.get("retentionPeriod") ?? "week") as RetentionPeriod,
@@ -1309,7 +1419,7 @@ export default function HomePage() {
         setHiddenSlugs(nextHidden);
         writeHiddenSlugs(nextHidden);
       }
-      window.localStorage.setItem(LAST_RESULT_KEY, JSON.stringify(data));
+      window.localStorage.setItem(LAST_RESULT_KEY, JSON.stringify({ ...data, accountSaveFailed: undefined }));
       await loadMyLinks();
       form.reset();
       setCustomSlug("");
@@ -1318,12 +1428,14 @@ export default function HomePage() {
         { label: "", url: "" },
         { label: "", url: "" },
       ]);
+      created = true;
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "예상치 못한 오류가 발생했습니다.";
       setError(message);
     } finally {
       setIsSubmitting(false);
     }
+    return created;
   }
 
   async function handleCopy() {
@@ -1649,14 +1761,15 @@ export default function HomePage() {
     const statsForLink = savedLinkStats[link.slug];
     const effectiveExpiresAt = statsForLink?.expiresAt ?? link.expiresAt;
     const linkExpired = isExpired(effectiveExpiresAt);
+    const isUnavailable = unavailableSlugs.includes(link.slug);
     const isDisabled = link.isActive === false;
     const dday = isDisabled || linkExpired ? null : getDday(effectiveExpiresAt);
     const currentFolderId = folderBySlug.get(link.slug) ?? "none";
-    const canDrag = allowDrag && !isDisabled;
+    const canDrag = allowDrag && !isDisabled && !isUnavailable;
 
     return (
       <div
-        className={`saved-link-row${draggedSlug === link.slug ? " is-dragging" : ""}${isDisabled ? " is-disabled" : ""}${showStage && result?.slug === link.slug ? " is-on-stage" : ""}`}
+        className={`saved-link-row${draggedSlug === link.slug ? " is-dragging" : ""}${isDisabled ? " is-disabled" : ""}${isUnavailable ? " is-unavailable" : ""}${showStage && result?.slug === link.slug ? " is-on-stage" : ""}`}
         key={link.slug}
         draggable={canDrag}
         onDragStart={canDrag ? (event) => {
@@ -1670,7 +1783,7 @@ export default function HomePage() {
         <button
           className="saved-link-item"
           type="button"
-          disabled={isDisabled}
+          disabled={isDisabled || isUnavailable}
           onClick={() => openMergedLink(link)}
           aria-label={`${link.label || "별명 없음"} ${linkUrl} 상세 보기`}
         >
@@ -1688,6 +1801,7 @@ export default function HomePage() {
           </div>
           <div className="saved-link-item-meta">
             {isDisabled ? <span className="my-link-status">비활성</span> : null}
+            {isUnavailable ? <span className="my-link-status">이 브라우저에서는 관리할 수 없어요</span> : null}
             {!isDisabled && linkExpired ? (
               <span className="expiry-badge urgent">만료 · {getGraceDaysLeft(effectiveExpiresAt)}일 내 복구 가능</span>
             ) : null}
@@ -1713,7 +1827,17 @@ export default function HomePage() {
             />
           </button>
         ) : null}
-        {showStage && !isDisabled && !linkExpired ? (
+        {isUnavailable ? (
+          <button
+            className="row-stage"
+            type="button"
+            onClick={() => removeSavedLinkLocally(link.slug)}
+            aria-label={`${link.label || linkUrl} 이 브라우저 목록에서 빼기`}
+          >
+            목록에서 빼기
+          </button>
+        ) : null}
+        {showStage && !isDisabled && !isUnavailable && !linkExpired ? (
           <button
             className="row-stage"
             type="button"
@@ -1729,7 +1853,7 @@ export default function HomePage() {
             복사
           </button>
         ) : null}
-        {showMove && !isDisabled ? (
+        {showMove && !isDisabled && !isUnavailable ? (
           <select
             className="row-move"
             aria-label={`${link.label || linkUrl} 폴더 이동`}
@@ -1799,7 +1923,7 @@ export default function HomePage() {
             <span className="mode-tab-desc">만든 링크 보기·정리</span>
           </button>
         </nav>
-          <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} onStatus={setIsAccountConnected} />
+          <AccountBar isEmbedded={isEmbedded} onChanged={() => void loadMyLinks()} onStatus={(connected) => { setIsAccountConnected(connected); setAccountKnown(true); }} />
         </div>
 
         {createMode !== "manage" ? (
@@ -2112,6 +2236,14 @@ export default function HomePage() {
                   </button>
                 </div>
                 <a className="qr-save" href={qrDownloadUrl} download={`samlink-qr-${result.slug ?? "code"}.png`}>이미지 저장</a>
+                {isEmbedded || !accountKnown ? null : isAccountConnected && !result.accountSaveFailed ? (
+                  <p className="stage-save is-account">☁️ 아지트 계정에 저장돼요 · 다른 컴퓨터에서도 보여요</p>
+                ) : (
+                  <div className="stage-save is-local">
+                    <span>⚠️ {result.accountSaveFailed ? "계정에 저장하지 못했어요 · 지금은 이 브라우저에만 있어요" : "이 브라우저에만 저장돼요"}</span>
+                    <button type="button" onClick={() => void connectFromStage()}>계정에 저장하기</button>
+                  </div>
+                )}
               </div>
               <div className="stage-stats" aria-label="방금 만든 링크 통계">
                 <span>총 클릭 <strong>{linkStats.clickCount}</strong></span>
@@ -2297,6 +2429,28 @@ export default function HomePage() {
         </nav>
         </div>
       </section>
+
+      {isStoragePromptOpen ? (
+        <div className="qr-overlay" role="presentation" onClick={closeStoragePrompt}>
+          <div
+            className="qr-modal storage-prompt"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="storage-prompt-title"
+            aria-describedby="storage-prompt-desc"
+            ref={storagePromptRef}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="storage-prompt-title">이 링크를 어디에 저장할까요?</h2>
+            <p id="storage-prompt-desc">지금은 아지트 계정에 연결되어 있지 않아요. 브라우저에만 저장하면 다른 컴퓨터에서는 보이지 않아요.</p>
+            <div className="storage-prompt-actions">
+              <button type="button" className="qr-open" autoFocus onClick={() => void chooseStorage("account")}>☁️ 아지트 계정에 저장</button>
+              <button type="button" className="qr-save" onClick={() => void chooseStorage("local")}>이 브라우저에만 저장</button>
+            </div>
+            <button type="button" className="storage-prompt-cancel" onClick={closeStoragePrompt}>취소</button>
+          </div>
+        </div>
+      ) : null}
 
       {toastMessage ? <div className="samlink-toast" role="status" aria-live="polite">✓ {toastMessage}</div> : null}
 

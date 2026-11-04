@@ -2788,3 +2788,17 @@ body { height: auto; overflow: visible; }
 .present-stage .qr-fallback { width: min(56vh, 82vw); }
 .present-stage .qr-fallback strong { font-size: clamp(1.1rem, 2.6vw, 1.6rem); }
 .present-stage .qr-fallback small { font-size: clamp(0.9rem, 1.8vw, 1.1rem); }
+
+/* 어디에 저장되는지 늘 보이게(2026-11-04): 결과 칸 맨 아래 한 줄, 처음 만들 때 묻는 창 */
+.stage-save { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; margin: 0; padding: 1cqw 1.6cqw; border-radius: 2cqw; font-size: max(0.8125rem, 2.1cqw); font-weight: 800; line-height: 1.3; word-break: keep-all; }
+.stage-save.is-account { background: #e8f8ef; color: #166534; }
+.stage-save.is-local { background: #fff4e5; color: #92400e; }
+.stage-save button { flex: none; min-height: 32px; padding: 0 10px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; font: inherit; cursor: pointer; }
+.stage-save button:focus-visible, .storage-prompt button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.storage-prompt { width: min(92vw, 460px); justify-items: stretch; gap: 14px; }
+.storage-prompt h2 { margin: 0; font-size: 1.25rem; }
+.storage-prompt p { margin: 0; color: var(--muted); line-height: 1.5; word-break: keep-all; }
+.storage-prompt-actions { display: grid; gap: 8px; }
+.storage-prompt-actions .qr-open, .storage-prompt-actions .qr-save { width: 100%; height: 48px; font-size: 1rem; }
+.storage-prompt-cancel { justify-self: center; padding: 6px 12px; border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer; }
+.saved-link-row.is-unavailable .saved-link-item:disabled { opacity: 1; cursor: default; }
